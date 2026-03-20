@@ -21,15 +21,19 @@ const els = {
   projectLabel:   document.getElementById('projectLabel'),
   btnSetProject:  document.getElementById('btnSetProject'),
   btnExportCsv:   document.getElementById('btnExportCsv'),
-  newContainer:   document.getElementById('newContainer'),
-  newFuelType:    document.getElementById('newFuelType'),
-  newDrums:       document.getElementById('newDrums'),
-  btnAddFuel:     document.getElementById('btnAddFuel'),
-  btnClearForm:   document.getElementById('btnClearForm'),
+  btnAddContainer:document.getElementById('btnAddContainer'),
   statusBar:      document.getElementById('statusBar'),
   status:         document.getElementById('status'),
   emptyTally:     document.getElementById('emptyTally'),
   inventoryRoot:  document.getElementById('inventoryRoot'),
+  // add dialog
+  addDialog:      document.getElementById('addDialog'),
+  addDialogClose: document.getElementById('addDialogClose'),
+  addCancelBtn:   document.getElementById('addCancelBtn'),
+  addConfirmBtn:  document.getElementById('addConfirmBtn'),
+  newContainer:   document.getElementById('newContainer'),
+  newFuelType:    document.getElementById('newFuelType'),
+  newDrums:       document.getElementById('newDrums'),
   // use dialog
   useDialog:      document.getElementById('useDialog'),
   useDialogFuel:  document.getElementById('useDialogFuel'),
@@ -143,7 +147,7 @@ els.syncSave.addEventListener('click', async () => {
   closeSyncDialog();
   const action = pendingAction;
   pendingAction = null;
-  if (action === 'add') { await doAdd(); return; }
+  if (action === 'add') { openAddDialog(); return; }
   if (action === 'export') { await doExport(); return; }
   clearForm();
   await refresh();
@@ -153,21 +157,41 @@ els.syncSave.addEventListener('click', async () => {
 els.syncCancel.addEventListener('click', () => { pendingAction = null; closeSyncDialog(); });
 
 els.syncDialog.addEventListener('click', e => {
-  const r = els.syncDialog.getBoundingClientRect();
-  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) {
-    pendingAction = null; closeSyncDialog();
-  }
+  if (e.target === els.syncDialog) { pendingAction = null; closeSyncDialog(); }
 });
 
-// ── Form ───────────────────────────────────────────────────────────────────
+// ── Add Dialog ─────────────────────────────────────────────────────────────
 
-function clearForm() {
+function openAddDialog() {
   els.newContainer.value = '';
   els.newFuelType.value  = '';
   els.newDrums.value     = '1';
+  els.addDialog.showModal();
+  setTimeout(() => els.newContainer.focus(), 80);
 }
 
-els.btnClearForm.addEventListener('click', () => { clearForm(); setStatus('Cleared.'); });
+function closeAddDialog() {
+  if (els.addDialog.open) els.addDialog.close();
+}
+
+els.btnAddContainer.addEventListener('click', () => {
+  if (!ensureProject('add')) return;
+  openAddDialog();
+});
+
+els.addDialogClose.addEventListener('click', closeAddDialog);
+els.addCancelBtn.addEventListener('click', closeAddDialog);
+
+els.addDialog.addEventListener('click', e => {
+  if (e.target === els.addDialog) closeAddDialog();
+});
+
+els.addConfirmBtn.addEventListener('click', async () => {
+  if (!ensureProject('add')) return;
+  await doAdd();
+});
+
+els.newDrums.addEventListener('keydown', e => { if (e.key === 'Enter') els.addConfirmBtn.click(); });
 
 // ── Add Fuel ───────────────────────────────────────────────────────────────
 
@@ -176,16 +200,15 @@ async function doAdd() {
   const fuelType  = els.newFuelType.value || '';
   const drums     = safeInt(els.newDrums.value, 1);
 
-  if (!fuelType)   return setStatus('Select a fuel type.', true);
-  if (drums < 1)   return setStatus('Enter at least 1 drum.', true);
+  if (!fuelType) return setStatus('Select a fuel type.', true);
+  if (drums < 1) return setStatus('Enter at least 1 drum.', true);
 
-  // Check if this container+fuel combo already exists — merge instead of duplicate
   const existing = rows.find(r => r.container === container && r.fuelType === fuelType);
 
   try {
+    closeAddDialog();
     setStatus('Saving…');
     if (existing) {
-      // Add to existing row
       const newDrums   = existing.drums + drums;
       const newGallons = existing.gallons + (drums * DRUM_GAL);
       await api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(existing.id)}`, {
@@ -199,17 +222,13 @@ async function doAdd() {
       });
     }
     await refresh();
-    clearForm();
-    setStatus(existing ? `Added ${drums} drum(s) to existing ${fuelType} in ${container}.` : `Added ${drums} drum(s) of ${fuelType} to ${container}.`);
+    setStatus(existing
+      ? `Added ${drums} drum(s) to ${fuelType} in ${container}.`
+      : `Added ${drums} drum(s) of ${fuelType} to ${container}.`);
   } catch (e) {
     setStatus(e.message, true);
   }
 }
-
-els.btnAddFuel.addEventListener('click', () => {
-  if (!ensureProject('add')) return;
-  doAdd();
-});
 
 // ── Refresh / Render ───────────────────────────────────────────────────────
 
@@ -294,8 +313,11 @@ function renderInventory() {
     for (const row of cRows) {
       const drums   = row.drums   || 0;
       const gallons = row.gallons || 0;
-      const totalGalForBar = Math.max(row.drums, Math.ceil(gallons / DRUM_GAL)) * DRUM_GAL;
-      const pct = totalGalForBar > 0 ? Math.min(100, Math.round((gallons / totalGalForBar) * 100)) : 0;
+
+      // Total capacity = original full drums (use max of current drums and drums implied by gallons)
+      const totalDrums    = Math.max(drums, Math.ceil(gallons / DRUM_GAL));
+      const totalGalForBar = totalDrums * DRUM_GAL;
+      const pct = totalGalForBar > 0 ? Math.min(100, (gallons / totalGalForBar) * 100) : 0;
 
       let fillClass = 'high';
       if (pct <= 20) fillClass = 'low';
@@ -306,6 +328,16 @@ function renderInventory() {
       else if (drums <= 1 && pct <= 30) { chipClass = 'chip-low'; chipLabel = 'Low'; }
 
       const dotColor = FUEL_COLORS[row.fuelType] || '#888';
+      const galStr   = gallons % 1 === 0 ? gallons : gallons.toFixed(1);
+
+      // Build tick marks: one per drum boundary (at 1/n, 2/n … (n-1)/n of bar width)
+      let ticksHtml = '';
+      if (totalDrums > 1 && totalDrums <= 20) {
+        for (let i = 1; i < totalDrums; i++) {
+          const pos = (i / totalDrums) * 100;
+          ticksHtml += `<div class="galTick" style="left:${pos}%"></div>`;
+        }
+      }
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -320,8 +352,11 @@ function renderInventory() {
         </td>
         <td>
           <div class="galWrap">
-            <div class="galPct">${pct}%</div>
-            <div class="galBar"><div class="galFill ${fillClass}" style="width:${pct}%"></div></div>
+            <div class="galPct">${galStr} gal</div>
+            <div class="galBar">
+              <div class="galFill ${fillClass}" style="width:${pct.toFixed(1)}%"></div>
+              ${ticksHtml}
+            </div>
           </div>
         </td>
         <td class="center">
@@ -448,8 +483,7 @@ els.useCancelBtn.addEventListener('click', closeUseDialog);
 els.useDialogClose.addEventListener('click', closeUseDialog);
 
 els.useDialog.addEventListener('click', e => {
-  const r = els.useDialog.getBoundingClientRect();
-  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeUseDialog();
+  if (e.target === els.useDialog) closeUseDialog();
 });
 
 // Confirm on Enter key in amount field
@@ -607,9 +641,9 @@ els.editSaveBtn.addEventListener('click', saveEditDialog);
 els.editCancelBtn.addEventListener('click', closeEditDialog);
 els.editDialogClose.addEventListener('click', closeEditDialog);
 
+// Only close on click of the dialog backdrop itself (not its contents)
 els.editDialog.addEventListener('click', e => {
-  const r = els.editDialog.getBoundingClientRect();
-  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeEditDialog();
+  if (e.target === els.editDialog) closeEditDialog();
 });
 
 // ── Export CSV ─────────────────────────────────────────────────────────────

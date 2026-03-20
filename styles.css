@@ -106,22 +106,12 @@ body::before {
   padding: 12px;
   box-shadow: var(--shadow);
 }
-.addCard { margin-bottom: 10px; }
 
-/* ── Add Grid ── */
-.addGrid {
-  display: grid;
-  grid-template-columns: 1.6fr 1.4fr 1fr auto;
+.headerRight {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  align-items: end;
-}
-.field { display: grid; gap: 4px; min-width: 0; }
-.lbl {
-  font-size: 10px;
-  color: var(--muted);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .5px;
+  flex-shrink: 0;
 }
 
 input, select {
@@ -137,19 +127,22 @@ input, select {
   -webkit-appearance: none;
   appearance: none;
 }
-input::placeholder { color: var(--muted); }
+.field { display: grid; gap: 4px; min-width: 0; }
+.lbl {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+
 input:focus, select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
 @supports (-webkit-touch-callout: none) {
   input, select { font-size: 16px; }
-}
-
-.addButtons {
-  display: flex;
-  gap: 6px;
-  align-self: end;
 }
 
 /* ── Buttons ── */
@@ -253,7 +246,7 @@ input:focus, select:focus {
 .tally:empty { display: none; }
 
 /* ── Inventory Root ── */
-.inventoryRoot { display: grid; gap: 16px; }
+.inventoryRoot { display: grid; gap: 16px; margin-top: 4px; }
 
 .emptyState {
   text-align: center;
@@ -368,29 +361,44 @@ table.fuelTable td.center { text-align: center; }
 }
 
 /* Remaining bar */
-.galWrap { display: grid; gap: 4px; min-width: 80px; }
+.galWrap { display: grid; gap: 3px; min-width: 80px; }
 .galPct {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--muted);
-  text-align: right;
 }
 .galBar {
-  height: 6px;
+  height: 10px;
   background: var(--card2);
-  border-radius: 999px;
-  overflow: hidden;
+  border-radius: 4px;
+  overflow: visible;
   border: 1px solid var(--border);
+  position: relative;
 }
 .galFill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: 3px;
   transition: width .4s ease;
-  min-width: 2px;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 .galFill.low  { background: var(--accent); }
 .galFill.mid  { background: var(--yellow); }
 .galFill.high { background: var(--green); }
+
+/* Drum tick marks */
+.galTick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--bg);
+  transform: translateX(-50%);
+  z-index: 2;
+  border-radius: 1px;
+  pointer-events: none;
+}
 
 /* Status chip */
 .statusChip {
@@ -599,23 +607,21 @@ table.fuelTable td.center { text-align: center; }
 /* ── Responsive ── */
 @media (max-width: 680px) {
   .wrap { width: calc(100vw - 16px); margin: 8px auto; }
-  .addGrid { grid-template-columns: 1fr 1fr; }
-  .addButtons { grid-column: 1 / -1; }
-  .addButtons .btn { flex: 1; text-align: center; }
-  .header { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .header { flex-wrap: wrap; gap: 6px; }
+  .headerRight { gap: 6px; }
+  .headerRight .btn { padding: 8px 12px; font-size: 12px; }
 
   /* Tighter table on mobile */
   table.fuelTable th { padding: 7px 8px; font-size: 9px; }
   table.fuelTable td { padding: 9px 8px; }
   .drumCount { font-size: 18px; }
   .fuelDot { width: 7px; height: 7px; }
-  .fuelTypeName gap { gap: 6px; }
   .statusChip { font-size: 9px; padding: 2px 5px; }
   .btn.useBtn { padding: 6px 10px; font-size: 11px; }
   .containerHeader { gap: 6px; }
   .editContainerBtn { padding: 4px 9px; font-size: 10px; }
 
-  /* Edit dialog full-width on mobile */
+  /* Dialogs full-width on mobile */
   .editDialogCard { width: calc(100vw - 20px); }
   .editRow { grid-template-columns: 1.4fr 1fr 1fr auto; gap: 6px; padding: 8px; }
   .editAddRow { grid-template-columns: 1.4fr 1fr auto; gap: 6px; padding: 8px; }
