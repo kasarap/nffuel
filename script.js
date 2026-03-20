@@ -335,7 +335,7 @@ function renderInventory() {
 
   for (const cName of sortedContainers) {
     const cRows = groups[cName];
-    cRows.sort((a, b) => FUEL_TYPES.indexOf(a.fuelType) - FUEL_TYPES.indexOf(b.fuelType));
+    cRows.sort((a, b) => (a.fuelType || '').localeCompare(b.fuelType || ''));
 
     const totalDrums = cRows.reduce((s, r) => s + (r.drums || 0), 0);
 
@@ -634,7 +634,7 @@ function renderEditBody(cRows) {
       <label class="lbl">Add Fuel Type</label>
       <select id="editNewFuelType">
         <option value="" disabled selected>Select fuel</option>
-        ${FUEL_TYPES.map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('')}
+        ${[...FUEL_TYPES].sort((a,b)=>a.localeCompare(b)).map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('')}
       </select>
     </div>
     <div class="editField">
@@ -728,8 +728,9 @@ els.editDialog.addEventListener('click', e => {
 // ── Manage Fuel Types Dialog ───────────────────────────────────────────────
 
 function buildFuelOptions(selectEl) {
+  const sorted = [...FUEL_TYPES].sort((a, b) => a.localeCompare(b));
   selectEl.innerHTML = '<option value="" disabled selected>Select fuel</option>' +
-    FUEL_TYPES.map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('');
+    sorted.map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('');
 }
 
 function refreshAllFuelSelects() {
@@ -817,7 +818,11 @@ function renderEmpties() {
   root.appendChild(hdr);
 
   if (empties.length === 0) {
-    root.innerHTML += `<div class="emptyState" style="padding:24px;font-size:13px;">No drums emptied yet — they'll appear here as you use fuel.</div>`;
+    const empty = document.createElement('div');
+    empty.className = 'emptyState';
+    empty.style.cssText = 'padding:24px;font-size:13px;';
+    empty.textContent = 'No drums emptied yet — they\'ll appear here as you use fuel.';
+    root.appendChild(empty);
     return;
   }
 
@@ -902,9 +907,7 @@ function renderSaltPails() {
   hdr.innerHTML = `
     <span class="containerName" style="color:var(--accent)">Salt Pail Quantity</span>
     <span class="containerLine"></span>
-    <button class="btn editContainerBtn" type="button" id="editSaltPailBtn">Edit</button>
   `;
-  hdr.querySelector('#editSaltPailBtn').addEventListener('click', openSaltPailDialog);
   root.appendChild(hdr);
 
   const wrap = document.createElement('div');
@@ -917,6 +920,7 @@ function renderSaltPails() {
       <tr>
         <th>Item</th>
         <th class="center">Quantity</th>
+        <th class="center">Edit</th>
       </tr>
     </thead>
   `;
@@ -928,7 +932,11 @@ function renderSaltPails() {
     <td class="center">
       <span style="font-size:22px;font-weight:700;color:#fff;">${saltPailQty}</span>
     </td>
+    <td class="center">
+      <button class="btn useBtn" type="button" id="saltPailEditRowBtn">Edit</button>
+    </td>
   `;
+  tr.querySelector('#saltPailEditRowBtn').addEventListener('click', openSaltPailDialog);
   tbody.appendChild(tr);
   table.appendChild(tbody);
   wrap.appendChild(table);
@@ -985,8 +993,7 @@ function renderEditEmptyBody() {
   body.innerHTML = '';
 
   if (empties.length === 0) {
-    body.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--muted);">No empty drum entries yet.</div>';
-    return;
+    // Fall through — still render the add-row so the user can add entries
   }
 
   for (const entry of empties) {
@@ -1007,7 +1014,7 @@ function renderEditEmptyBody() {
       <div class="editField" style="flex:1.2">
         <label class="lbl">Fuel Type</label>
         <select class="editEmptyFuelType">
-          ${FUEL_TYPES.map(f => `<option value="${escHtml(f)}"${f === entry.fuelType ? ' selected' : ''}>${escHtml(f)}</option>`).join('')}
+          ${[...FUEL_TYPES].sort((a,b)=>a.localeCompare(b)).map(f => `<option value="${escHtml(f)}"${f === entry.fuelType ? ' selected' : ''}>${escHtml(f)}</option>`).join('')}
         </select>
       </div>
       <button class="deleteRowBtn editDeleteBtn" type="button" title="Remove">✕</button>
@@ -1039,7 +1046,7 @@ function renderEditEmptyBody() {
       <label class="lbl">Add Fuel Type</label>
       <select id="editEmptyNewFuelType">
         <option value="" disabled selected>Select fuel</option>
-        ${FUEL_TYPES.map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('')}
+        ${[...FUEL_TYPES].sort((a,b)=>a.localeCompare(b)).map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('')}
       </select>
     </div>
     <div class="editField">
