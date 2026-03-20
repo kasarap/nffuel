@@ -555,7 +555,7 @@ table.fuelTable td.center { text-align: center; }
 /* Edit row — drums only + reset note */
 .editRow {
   display: grid;
-  grid-template-columns: 1.6fr 1fr auto auto;
+  grid-template-columns: 1.4fr 1fr 1fr auto;
   gap: 8px;
   align-items: center;
   padding: 10px 12px;
@@ -670,6 +670,6 @@ table.fuelTable td.center { text-align: center; }
 
   /* Dialogs full-width on mobile */
   .editDialogCard { width: calc(100vw - 20px); }
-  .editRow { grid-template-columns: 1.4fr 1fr auto auto; gap: 6px; padding: 8px; }
+  .editRow { grid-template-columns: 1fr 0.8fr 0.8fr auto; gap: 6px; padding: 8px; }
   .editAddRow { grid-template-columns: 1.4fr 1fr auto; gap: 6px; padding: 8px; }
 }

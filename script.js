@@ -590,6 +590,7 @@ function renderEditBody(cRows) {
     div.dataset.id = row.id;
 
     const dotColor = fuelColor(row.fuelType);
+    const galVal = row.gallons % 1 === 0 ? row.gallons : row.gallons.toFixed(1);
     div.innerHTML = `
       <div class="editRowFuel">
         <span class="fuelDot" style="background:${dotColor}"></span>
@@ -599,7 +600,10 @@ function renderEditBody(cRows) {
         <label class="lbl">Drums</label>
         <input class="editDrums" type="text" inputmode="numeric" value="${row.drums}" />
       </div>
-      <div class="editRowNote">resets to full</div>
+      <div class="editField">
+        <label class="lbl">Gallons</label>
+        <input class="editGallons" type="text" inputmode="decimal" value="${galVal}" />
+      </div>
       <button class="deleteRowBtn editDeleteBtn" type="button" title="Remove">✕</button>
     `;
 
@@ -688,9 +692,12 @@ async function saveEditDialog() {
   const updates = [];
   for (const div of editRows) {
     const id = String(div.dataset.id || '');
-    const drumsInput = div.querySelector('.editDrums');
+    const drumsInput   = div.querySelector('.editDrums');
+    const gallonsInput = div.querySelector('.editGallons');
     const drums   = safeInt(drumsInput ? drumsInput.value : '0', 0);
-    const gallons = drums * DRUM_GAL; // reset to full on drum count edit
+    const gallons = gallonsInput && gallonsInput.value.trim() !== ''
+      ? safeFloat(gallonsInput.value)
+      : drums * DRUM_GAL;
     if (id) updates.push({ id, drums, gallons, ...(renamed ? { container: newName } : {}) });
   }
 
