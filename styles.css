@@ -301,6 +301,7 @@ input:focus, select:focus {
 table.fuelTable {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 table.fuelTable thead tr {
@@ -309,17 +310,26 @@ table.fuelTable thead tr {
 }
 
 table.fuelTable th {
-  padding: 9px 14px;
-  font-size: 10px;
+  padding: 8px 10px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .6px;
   color: var(--muted);
   text-align: left;
   white-space: nowrap;
+  overflow: hidden;
 }
 table.fuelTable th.right { text-align: right; }
 table.fuelTable th.center { text-align: center; }
+
+/* Column widths */
+table.fuelTable th:nth-child(1) { width: 28%; }  /* Fuel */
+table.fuelTable th:nth-child(2) { width: 14%; }  /* Drums */
+table.fuelTable th:nth-child(3) { width: 24%; }  /* Remaining */
+table.fuelTable th:nth-child(4) { width: 16%; }  /* Status */
+table.fuelTable th:nth-child(5) { width: 12%; }  /* Use */
+table.fuelTable th:nth-child(6) { width: 6%; }   /* ✕ */
 
 table.fuelTable tbody tr {
   border-bottom: 1px solid var(--border);
@@ -329,9 +339,10 @@ table.fuelTable tbody tr:last-child { border-bottom: none; }
 table.fuelTable tbody tr:hover { background: rgba(255,255,255,.025); }
 
 table.fuelTable td {
-  padding: 11px 14px;
+  padding: 10px 10px;
   font-size: 13px;
   vertical-align: middle;
+  overflow: hidden;
 }
 table.fuelTable td.right { text-align: right; }
 table.fuelTable td.center { text-align: center; }
@@ -350,27 +361,22 @@ table.fuelTable td.center { text-align: center; }
 
 /* Drum count */
 .drumCount {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   color: #fff;
   line-height: 1;
 }
-.drumCountSub {
-  font-size: 10px;
-  color: var(--muted);
-  margin-top: 1px;
-}
 
-/* Gal remaining bar */
-.galWrap { display: grid; gap: 3px; min-width: 120px; }
-.galLabel {
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
+/* Remaining bar */
+.galWrap { display: grid; gap: 4px; min-width: 80px; }
+.galPct {
+  font-size: 11px;
+  font-weight: 600;
   color: var(--muted);
+  text-align: right;
 }
 .galBar {
-  height: 5px;
+  height: 6px;
   background: var(--card2);
   border-radius: 999px;
   overflow: hidden;
@@ -499,6 +505,97 @@ table.fuelTable td.center { text-align: center; }
 .dialogCard h2 { margin: 0 0 4px; font-size: 17px; color: #fff; }
 .dialogCard p  { margin: 0 0 4px; color: var(--muted); font-size: 12px; }
 
+/* ── Edit Container Button ── */
+.editContainerBtn {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: border-color .15s, color .15s;
+  flex-shrink: 0;
+}
+.editContainerBtn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Edit Dialog ── */
+.editDialogEl { max-width: 100%; }
+.editDialogCard {
+  width: min(560px, calc(100vw - 20px));
+  max-height: 90vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.editDialogCard .dialogHeader { margin-bottom: 14px; }
+
+.editDialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 14px;
+}
+
+/* Each existing fuel row */
+.editRow {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.editRowFuel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.editFuelName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.editField {
+  display: grid;
+  gap: 3px;
+}
+.editField input, .editField select {
+  padding: 7px 9px;
+  font-size: 14px;
+}
+.editDeleteBtn {
+  justify-self: center;
+}
+
+/* Add new fuel row inside edit dialog */
+.editAddRow {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr auto;
+  gap: 8px;
+  align-items: end;
+  padding: 10px 12px;
+  background: rgba(232,0,61,.05);
+  border: 1px dashed rgba(232,0,61,.25);
+  border-radius: 8px;
+  margin-top: 6px;
+}
+.editAddRow select, .editAddRow input {
+  padding: 7px 9px;
+  font-size: 14px;
+}
+.editAddRow .btn {
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
 /* ── Responsive ── */
 @media (max-width: 680px) {
   .wrap { width: calc(100vw - 16px); margin: 8px auto; }
@@ -506,7 +603,20 @@ table.fuelTable td.center { text-align: center; }
   .addButtons { grid-column: 1 / -1; }
   .addButtons .btn { flex: 1; text-align: center; }
   .header { flex-direction: column; align-items: flex-start; gap: 6px; }
-  table.fuelTable th, table.fuelTable td { padding: 9px 10px; }
-  .galWrap { min-width: 80px; }
-  .drumCount { font-size: 17px; }
+
+  /* Tighter table on mobile */
+  table.fuelTable th { padding: 7px 8px; font-size: 9px; }
+  table.fuelTable td { padding: 9px 8px; }
+  .drumCount { font-size: 18px; }
+  .fuelDot { width: 7px; height: 7px; }
+  .fuelTypeName gap { gap: 6px; }
+  .statusChip { font-size: 9px; padding: 2px 5px; }
+  .btn.useBtn { padding: 6px 10px; font-size: 11px; }
+  .containerHeader { gap: 6px; }
+  .editContainerBtn { padding: 4px 9px; font-size: 10px; }
+
+  /* Edit dialog full-width on mobile */
+  .editDialogCard { width: calc(100vw - 20px); }
+  .editRow { grid-template-columns: 1.4fr 1fr 1fr auto; gap: 6px; padding: 8px; }
+  .editAddRow { grid-template-columns: 1.4fr 1fr auto; gap: 6px; padding: 8px; }
 }

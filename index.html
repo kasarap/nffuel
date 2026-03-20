@@ -73,7 +73,7 @@
         </div>
         <div class="statusRight">
           <span id="emptyTally" class="tally"></span>
-          <span class="pill">V3</span>
+          <span class="pill">V5</span>
         </div>
       </div>
     </div>
@@ -123,6 +123,26 @@
     </div>
   </dialog>
 
+  <!-- Edit Container Dialog -->
+  <dialog id="editDialog" class="dialog editDialogEl">
+    <div class="dialogCard editDialogCard">
+      <div class="dialogHeader">
+        <div>
+          <div class="lbl" style="margin-bottom:2px">Editing Container</div>
+          <div id="editDialogTitle" class="dialogFuelName"></div>
+        </div>
+        <button id="editDialogClose" class="iconBtn" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <div id="editDialogBody" class="editDialogBody"></div>
+
+      <div class="dialogBtns">
+        <button id="editCancelBtn" class="btn ghost" type="button">Cancel</button>
+        <button id="editSaveBtn" class="btn primary" type="button">Save All</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Sync Name Dialog -->
   <dialog id="syncDialog" class="dialog">
     <div class="dialogCard">
@@ -136,6 +156,6 @@
     </div>
   </dialog>
 
-  <script defer src="script.js?v=v3"></script>
+  <script defer src="script.js?v=v5"></script>
 </body>
 </html>

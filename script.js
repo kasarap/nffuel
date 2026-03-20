@@ -46,14 +46,22 @@ const els = {
   syncNameInput:  document.getElementById('syncNameInput'),
   syncSave:       document.getElementById('syncSave'),
   syncCancel:     document.getElementById('syncCancel'),
+  // edit container dialog
+  editDialog:        document.getElementById('editDialog'),
+  editDialogTitle:   document.getElementById('editDialogTitle'),
+  editDialogBody:    document.getElementById('editDialogBody'),
+  editDialogClose:   document.getElementById('editDialogClose'),
+  editSaveBtn:       document.getElementById('editSaveBtn'),
+  editCancelBtn:     document.getElementById('editCancelBtn'),
+  editAddFuelRow:    document.getElementById('editAddFuelRow'),
 };
 
 let project     = localStorage.getItem('fuel_project') || '';
 let rows        = [];   // flat array of {id, container, fuelType, drums, gallons}
 let pendingAction = null;
 
-// Active "Use" context
-let useCtx = null; // {id, container, fuelType, drums, gallons}
+let useCtx  = null; // {id, container, fuelType, drums, gallons}
+let editCtx = null; // container name being edited
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -257,7 +265,9 @@ function renderInventory() {
       <span class="containerName">${escHtml(cName)}</span>
       <span class="containerLine"></span>
       <span class="containerMeta">${totalDrums} drum${totalDrums !== 1 ? 's' : ''} · ${cRows.length} fuel${cRows.length !== 1 ? 's' : ''}</span>
+      <button class="btn editContainerBtn" type="button">Edit</button>
     `;
+    hdr.querySelector('.editContainerBtn').addEventListener('click', () => openEditDialog(cName, cRows));
     block.appendChild(hdr);
 
     // Table
@@ -271,7 +281,7 @@ function renderInventory() {
         <tr>
           <th>Fuel Type</th>
           <th class="center">Drums</th>
-          <th>Gallons Remaining</th>
+          <th>Remaining</th>
           <th class="center">Status</th>
           <th class="center">Use</th>
           <th></th>
@@ -284,8 +294,6 @@ function renderInventory() {
     for (const row of cRows) {
       const drums   = row.drums   || 0;
       const gallons = row.gallons || 0;
-      const maxGal  = drums * DRUM_GAL;  // theoretical max for bar (use stored drums as reference)
-      // Bar is relative to full drums worth
       const totalGalForBar = Math.max(row.drums, Math.ceil(gallons / DRUM_GAL)) * DRUM_GAL;
       const pct = totalGalForBar > 0 ? Math.min(100, Math.round((gallons / totalGalForBar) * 100)) : 0;
 
@@ -298,7 +306,6 @@ function renderInventory() {
       else if (drums <= 1 && pct <= 30) { chipClass = 'chip-low'; chipLabel = 'Low'; }
 
       const dotColor = FUEL_COLORS[row.fuelType] || '#888';
-      const galStr   = gallons % 1 === 0 ? gallons : gallons.toFixed(1);
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -310,14 +317,10 @@ function renderInventory() {
         </td>
         <td class="center">
           <div class="drumCount">${drums}</div>
-          <div class="drumCountSub">× 55 gal</div>
         </td>
         <td>
           <div class="galWrap">
-            <div class="galLabel">
-              <span>${galStr} gal</span>
-              <span>${pct}%</span>
-            </div>
+            <div class="galPct">${pct}%</div>
             <div class="galBar"><div class="galFill ${fillClass}" style="width:${pct}%"></div></div>
           </div>
         </td>
@@ -416,22 +419,26 @@ els.useConfirmBtn.addEventListener('click', async () => {
   if (!used || used <= 0) return setStatus('Enter gallons used.', true);
   if (used > useCtx.gallons) return setStatus(`Only ${useCtx.gallons} gal available.`, true);
 
-  const newGallons   = Math.max(0, Math.round((useCtx.gallons - used) * 100) / 100);
-  const oldFullDrums = Math.ceil(useCtx.gallons / DRUM_GAL);
+  // Snapshot everything we need BEFORE closing (closeUseDialog nulls useCtx)
+  const snap = { ...useCtx };
+
+  const newGallons   = Math.max(0, Math.round((snap.gallons - used) * 100) / 100);
+  const oldFullDrums = Math.ceil(snap.gallons / DRUM_GAL);
   const newFullDrums = newGallons > 0 ? Math.ceil(newGallons / DRUM_GAL) : 0;
   const drumDelta    = oldFullDrums - newFullDrums;
-  const newDrums     = Math.max(0, useCtx.drums - drumDelta);
+  const newDrums     = Math.max(0, snap.drums - drumDelta);
+
+  closeUseDialog();
 
   try {
-    closeUseDialog();
     setStatus('Updating…');
-    await api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(useCtx.id)}`, {
+    await api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(snap.id)}`, {
       method: 'PUT',
       body: JSON.stringify({ drums: newDrums, gallons: newGallons }),
     });
     await refresh();
     const drumMsg = drumDelta > 0 ? ` (${drumDelta} drum${drumDelta > 1 ? 's' : ''} emptied)` : '';
-    setStatus(`Subtracted ${used} gal from ${useCtx.fuelType}${drumMsg}.`);
+    setStatus(`Subtracted ${used} gal from ${snap.fuelType}${drumMsg}.`);
   } catch (e) {
     setStatus(e.message, true);
   }
@@ -448,6 +455,161 @@ els.useDialog.addEventListener('click', e => {
 // Confirm on Enter key in amount field
 els.useAmount.addEventListener('keydown', e => {
   if (e.key === 'Enter') els.useConfirmBtn.click();
+});
+
+// ── Edit Container Dialog ──────────────────────────────────────────────────
+
+function openEditDialog(containerName, cRows) {
+  editCtx = containerName;
+  els.editDialogTitle.textContent = containerName;
+
+  // Build editable rows
+  renderEditBody(cRows);
+  els.editDialog.showModal();
+}
+
+function renderEditBody(cRows) {
+  const body = els.editDialogBody;
+  body.innerHTML = '';
+
+  for (const row of cRows) {
+    const div = document.createElement('div');
+    div.className = 'editRow';
+    div.dataset.id = row.id;
+
+    const dotColor = FUEL_COLORS[row.fuelType] || '#888';
+    div.innerHTML = `
+      <div class="editRowFuel">
+        <span class="fuelDot" style="background:${dotColor}"></span>
+        <span class="editFuelName">${escHtml(row.fuelType)}</span>
+      </div>
+      <div class="editField">
+        <label class="lbl">Drums</label>
+        <input class="editDrums" type="text" inputmode="numeric" value="${row.drums}" />
+      </div>
+      <div class="editField">
+        <label class="lbl">Gallons</label>
+        <input class="editGallons" type="text" inputmode="decimal" value="${row.gallons}" />
+      </div>
+      <button class="deleteRowBtn editDeleteBtn" type="button" title="Remove">✕</button>
+    `;
+
+    div.querySelector('.editDeleteBtn').addEventListener('click', async () => {
+      const ok = confirm(`Remove ${row.fuelType} from ${editCtx}?`);
+      if (!ok) return;
+      try {
+        setStatus('Removing…');
+        await api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(row.id)}`, { method: 'DELETE' });
+        await refresh();
+        // Re-open dialog with updated rows for this container (if any remain)
+        const remaining = rows.filter(r => r.container === editCtx);
+        if (remaining.length > 0) {
+          renderEditBody(remaining);
+        } else {
+          closeEditDialog();
+        }
+        setStatus(`Removed ${row.fuelType} from ${editCtx}.`);
+      } catch (e) {
+        setStatus(e.message, true);
+      }
+    });
+
+    body.appendChild(div);
+  }
+
+  // "Add fuel to this container" row
+  const addDiv = document.createElement('div');
+  addDiv.className = 'editAddRow';
+  addDiv.id = 'editAddFuelRow';
+  addDiv.innerHTML = `
+    <div class="editField" style="flex:2">
+      <label class="lbl">Add Fuel Type</label>
+      <select id="editNewFuelType">
+        <option value="" disabled selected>Select fuel</option>
+        ${FUEL_TYPES.map(f => `<option value="${f}">${f}</option>`).join('')}
+      </select>
+    </div>
+    <div class="editField">
+      <label class="lbl">Drums</label>
+      <input id="editNewDrums" type="text" inputmode="numeric" placeholder="1" value="1" />
+    </div>
+    <button id="editAddRowBtn" class="btn primary" type="button" style="align-self:end">+ Add</button>
+  `;
+
+  addDiv.querySelector('#editAddRowBtn').addEventListener('click', async () => {
+    const fuelType = addDiv.querySelector('#editNewFuelType').value;
+    const drums    = safeInt(addDiv.querySelector('#editNewDrums').value, 1);
+    if (!fuelType) return setStatus('Select a fuel type.', true);
+
+    // Check if already exists in this container
+    const existing = rows.find(r => r.container === editCtx && r.fuelType === fuelType);
+    try {
+      setStatus('Adding…');
+      if (existing) {
+        const newDrums   = existing.drums + drums;
+        const newGallons = existing.gallons + (drums * DRUM_GAL);
+        await api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(existing.id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ drums: newDrums, gallons: newGallons }),
+        });
+      } else {
+        await api(`/api/fuel?project=${encodeURIComponent(project)}`, {
+          method: 'POST',
+          body: JSON.stringify({ row: { container: editCtx, fuelType, drums, gallons: drums * DRUM_GAL } }),
+        });
+      }
+      await refresh();
+      const updated = rows.filter(r => r.container === editCtx);
+      renderEditBody(updated);
+      setStatus(`Added ${drums} drum(s) of ${fuelType} to ${editCtx}.`);
+    } catch (e) {
+      setStatus(e.message, true);
+    }
+  });
+
+  body.appendChild(addDiv);
+}
+
+async function saveEditDialog() {
+  const body    = els.editDialogBody;
+  const editRows = [...body.querySelectorAll('.editRow')];
+
+  const updates = [];
+  for (const div of editRows) {
+    const id      = div.dataset.id;
+    const drums   = safeInt(div.querySelector('.editDrums').value, 0);
+    const gallons = safeFloat(div.querySelector('.editGallons').value);
+    updates.push({ id, drums, gallons });
+  }
+
+  try {
+    setStatus('Saving…');
+    await Promise.all(updates.map(u =>
+      api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(u.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ drums: u.drums, gallons: u.gallons }),
+      })
+    ));
+    closeEditDialog();
+    await refresh();
+    setStatus(`${editCtx} updated.`);
+  } catch (e) {
+    setStatus(e.message, true);
+  }
+}
+
+function closeEditDialog() {
+  if (els.editDialog.open) els.editDialog.close();
+  editCtx = null;
+}
+
+els.editSaveBtn.addEventListener('click', saveEditDialog);
+els.editCancelBtn.addEventListener('click', closeEditDialog);
+els.editDialogClose.addEventListener('click', closeEditDialog);
+
+els.editDialog.addEventListener('click', e => {
+  const r = els.editDialog.getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeEditDialog();
 });
 
 // ── Export CSV ─────────────────────────────────────────────────────────────
