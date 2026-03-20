@@ -57,10 +57,11 @@ export async function onRequest(context) {
     const idx  = data.rows.findIndex(r => r.id === id);
     if (idx < 0) return json({ error: 'Not found' }, 404);
 
-    // Accept partial updates (drums and/or gallons)
+    // Accept partial updates (drums and/or gallons and/or container)
     const updated = { ...data.rows[idx] };
-    if (body.drums   !== undefined) updated.drums   = Math.max(0, parseInt(body.drums, 10)   || 0);
-    if (body.gallons !== undefined) updated.gallons = Math.max(0, parseFloat(body.gallons)   || 0);
+    if (body.drums     !== undefined) updated.drums     = Math.max(0, parseInt(body.drums, 10)   || 0);
+    if (body.gallons   !== undefined) updated.gallons   = Math.max(0, parseFloat(body.gallons)   || 0);
+    if (body.container !== undefined) updated.container = safeStr(body.container) || 'Default';
     // Full row replace (used when merging on add)
     if (body.row) Object.assign(updated, normalizeRow(body.row));
     updated.updatedAt = new Date().toISOString();

@@ -573,7 +573,7 @@ els.useAmount.addEventListener('keydown', e => {
 
 function openEditDialog(containerName, cRows) {
   editCtx = containerName;
-  els.editDialogTitle.textContent = containerName;
+  els.editDialogTitle.value = containerName;
 
   // Build editable rows
   renderEditBody(cRows);
@@ -680,32 +680,34 @@ function renderEditBody(cRows) {
 
 async function saveEditDialog() {
   // Snapshot ALL input values synchronously before any async work
+  const newName  = (els.editDialogTitle.value || '').trim() || editCtx;
+  const renamed  = newName !== editCtx;
   const body     = els.editDialogBody;
   const editRows = [...body.querySelectorAll('.editRow')];
 
   const updates = [];
   for (const div of editRows) {
-    const id     = String(div.dataset.id || '');
+    const id = String(div.dataset.id || '');
     const drumsInput = div.querySelector('.editDrums');
-    const drums  = safeInt(drumsInput ? drumsInput.value : '0', 0);
+    const drums   = safeInt(drumsInput ? drumsInput.value : '0', 0);
     const gallons = drums * DRUM_GAL; // reset to full on drum count edit
-    if (id) updates.push({ id, drums, gallons });
+    if (id) updates.push({ id, drums, gallons, ...(renamed ? { container: newName } : {}) });
   }
 
-  if (updates.length === 0) { closeEditDialog(); return; }
-
+  // If renamed but no fuel rows exist yet, nothing to PUT — still fine
   try {
     setStatus('Saving…');
-    // Sequential saves to avoid KV write conflicts
     for (const u of updates) {
+      const payload = { drums: u.drums, gallons: u.gallons };
+      if (u.container) payload.container = u.container;
       await api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(u.id)}`, {
         method: 'PUT',
-        body: JSON.stringify({ drums: u.drums, gallons: u.gallons }),
+        body: JSON.stringify(payload),
       });
     }
     closeEditDialog();
     await refresh();
-    setStatus(`${editCtx || 'Container'} updated.`);
+    setStatus(renamed ? `Renamed to "${newName}".` : `${newName} updated.`);
   } catch (e) {
     setStatus(e.message, true);
   }
