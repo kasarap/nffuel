@@ -9,13 +9,15 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+
   <main class="wrap">
 
+    <!-- Header -->
     <header class="header">
       <div class="headerLeft">
-        <h1><span style="color:#E8003D;font-weight:900;">NF</span> Fuel Inventory</h1>
+        <h1><span class="nf">NF</span> Fuel Inventory</h1>
         <div class="meta">
-          <span>Sync Name:</span>
+          <span>Sync:</span>
           <span id="projectLabel" class="pill">Not set</span>
           <button id="btnSetProject" class="linkbtn" type="button">Change</button>
         </div>
@@ -25,7 +27,7 @@
       </div>
     </header>
 
-    <!-- Add Drum / Container Controls -->
+    <!-- Add Fuel Row -->
     <section class="card addCard">
       <div class="addGrid">
 
@@ -50,39 +52,12 @@
         </div>
 
         <div class="field">
-          <div class="lbl">Drum Label</div>
-          <input id="newDrumLabel" type="text" placeholder="e.g. D-01, Drum 3" autocomplete="off" />
-        </div>
-
-        <div class="field">
-          <div class="lbl">Capacity (gal)</div>
-          <input id="newCapacity" type="text" inputmode="decimal" placeholder="55" value="55" />
-        </div>
-
-        <div class="field">
-          <div class="lbl">Current Level (gal)</div>
-          <input id="newLevel" type="text" inputmode="decimal" placeholder="0" />
-        </div>
-
-        <div class="field">
-          <div class="lbl">Status</div>
-          <select id="newStatus">
-            <option value="in-use">In Use</option>
-            <option value="empty">Empty</option>
-            <option value="full">Full</option>
-            <option value="reserved">Reserved</option>
-          </select>
-        </div>
-
-        <div class="field fieldNotes">
-          <div class="lbl">Notes</div>
-          <input id="newNotes" type="text" placeholder="Optional notes" autocomplete="off" />
+          <div class="lbl">Drums to Add</div>
+          <input id="newDrums" type="text" inputmode="numeric" placeholder="1" value="1" />
         </div>
 
         <div class="addButtons">
-          <button id="btnAddDrum" class="btn primary" type="button">+ Add Drum</button>
-          <button id="btnUpdateDrum" class="btn accent" type="button" style="display:none">Save Edit</button>
-          <button id="btnCancelEdit" class="btn ghost" type="button" style="display:none">Cancel</button>
+          <button id="btnAddFuel" class="btn primary" type="button">+ Add</button>
           <button id="btnClearForm" class="btn ghost" type="button">Clear</button>
         </div>
 
@@ -92,28 +67,68 @@
     <!-- Status Bar -->
     <div id="statusBar" class="statusBar" data-error="0">
       <div class="statusBarInner">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="statusDot" aria-hidden="true"></span>
+        <div class="statusLeft">
+          <span class="statusDot"></span>
           <span id="status" class="statusText">Loading…</span>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span id="emptyTally" class="tally" title="Empty drums"></span>
-          <span class="pill">V2</span>
+        <div class="statusRight">
+          <span id="emptyTally" class="tally"></span>
+          <span class="pill">V3</span>
         </div>
       </div>
     </div>
 
-    <!-- Inventory Grid -->
+    <!-- Container Tables -->
     <div id="inventoryRoot" class="inventoryRoot"></div>
 
   </main>
+
+  <!-- Use Fuel Popup -->
+  <dialog id="useDialog" class="dialog">
+    <div class="dialogCard">
+      <div class="dialogHeader">
+        <div>
+          <div id="useDialogFuel" class="dialogFuelName"></div>
+          <div id="useDialogContainer" class="dialogContainerName"></div>
+        </div>
+        <button id="useDialogClose" class="iconBtn" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <div class="useStats">
+        <div class="useStat">
+          <div class="useStatVal" id="useStatDrums">—</div>
+          <div class="useStatLbl">Drums</div>
+        </div>
+        <div class="useStatDivider"></div>
+        <div class="useStat">
+          <div class="useStatVal" id="useStatGals">—</div>
+          <div class="useStatLbl">Gal remaining</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="lbl">Gallons Used</div>
+        <input id="useAmount" type="text" inputmode="decimal"
+               pattern="[0-9]*[.]?[0-9]*"
+               placeholder="0"
+               autocomplete="off" />
+      </div>
+
+      <div id="usePreview" class="usePreview"></div>
+
+      <div class="dialogBtns">
+        <button id="useCancelBtn" class="btn ghost" type="button">Cancel</button>
+        <button id="useConfirmBtn" class="btn primary" type="button">Subtract</button>
+      </div>
+    </div>
+  </dialog>
 
   <!-- Sync Name Dialog -->
   <dialog id="syncDialog" class="dialog">
     <div class="dialogCard">
       <h2>Set Sync Name</h2>
-      <p>Used to sync inventory across devices. Use the same name on every device.</p>
-      <input id="syncNameInput" type="text" placeholder="e.g. FuelYard-Main" autocomplete="off" />
+      <p>Use the same name on every device to share inventory.</p>
+      <input id="syncNameInput" type="text" placeholder="e.g. NF-FuelYard" autocomplete="off" />
       <div class="dialogBtns">
         <button id="syncCancel" class="btn ghost" type="button">Cancel</button>
         <button id="syncSave" class="btn primary" type="button">Save</button>
@@ -121,6 +136,6 @@
     </div>
   </dialog>
 
-  <script defer src="script.js?v=v2"></script>
+  <script defer src="script.js?v=v3"></script>
 </body>
 </html>

@@ -1,33 +1,27 @@
-// Fuel Inventory — /api/fuel/export — V1
-// GET all drums for CSV export
+// Fuel Inventory — /api/fuel/export — V3
 
 export async function onRequest(context) {
   const { request, env } = context;
   const kv = env.APP_KV;
   if (!kv) return json({ error: 'Missing KV binding APP_KV' }, 500);
 
-  if (request.method.toUpperCase() !== 'GET') {
-    return json({ error: 'Method not allowed' }, 405);
-  }
+  if (request.method.toUpperCase() !== 'GET') return json({ error: 'Method not allowed' }, 405);
 
-  const url = new URL(request.url);
-  const projectRaw = url.searchParams.get('project');
-  const project = sanitizeProject(projectRaw);
+  const url     = new URL(request.url);
+  const project = sanitizeProject(url.searchParams.get('project'));
   if (!project) return json({ error: 'Missing or invalid project' }, 400);
 
   const key = `fuel:${project}`;
   const raw = await kv.get(key, { type: 'json' });
-  const data = (raw && typeof raw === 'object' && Array.isArray(raw.drums))
-    ? raw : { drums: [] };
+  const data = (raw && Array.isArray(raw.rows)) ? raw : { rows: [] };
 
-  data.drums.sort((a, b) => {
+  data.rows.sort((a, b) => {
     const ca = (a.container || '').toLowerCase();
     const cb = (b.container || '').toLowerCase();
-    if (ca !== cb) return ca.localeCompare(cb);
-    return (a.label || '').localeCompare(b.label || '');
+    return ca !== cb ? ca.localeCompare(cb) : (a.fuelType || '').localeCompare(b.fuelType || '');
   });
 
-  return json({ project, exportedAt: new Date().toISOString(), drums: data.drums });
+  return json({ project, exportedAt: new Date().toISOString(), rows: data.rows });
 }
 
 function sanitizeProject(s) {
@@ -40,9 +34,6 @@ function sanitizeProject(s) {
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-    },
+    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
   });
 }

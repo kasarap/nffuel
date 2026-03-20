@@ -1,46 +1,61 @@
-// Fuel Inventory — V2
-// Changes: National Foam brand theme (#E8003D), default drum capacity 55 gal
+// Fuel Inventory — V3
+// Container tables, one row per fuel type, Use button subtracts gallons,
+// drum count decrements every 55 gal used. No drum label field.
 
-window.__appLoaded = true;
+const DRUM_GAL    = 55;
+const FUEL_TYPES  = ['IPA','Heptane','Hexane','87','Jet A','Ethanol','Diesel','Kerosene'];
 
-const FUEL_TYPES = ['IPA','Heptane','Hexane','87','Jet A','Ethanol','Diesel','Kerosene'];
-const STATUS_LABELS = { 'in-use': 'In Use', empty: 'Empty', full: 'Full', reserved: 'Reserved' };
+// Colour dots per fuel
+const FUEL_COLORS = {
+  'IPA':      '#60a5fa',
+  'Heptane':  '#fbbf24',
+  'Hexane':   '#c084fc',
+  '87':       '#4ade80',
+  'Jet A':    '#f87171',
+  'Ethanol':  '#2dd4bf',
+  'Diesel':   '#fb923c',
+  'Kerosene': '#a5b4fc',
+};
 
 const els = {
   projectLabel:   document.getElementById('projectLabel'),
   btnSetProject:  document.getElementById('btnSetProject'),
   btnExportCsv:   document.getElementById('btnExportCsv'),
-
   newContainer:   document.getElementById('newContainer'),
   newFuelType:    document.getElementById('newFuelType'),
-  newDrumLabel:   document.getElementById('newDrumLabel'),
-  newCapacity:    document.getElementById('newCapacity'),
-  newLevel:       document.getElementById('newLevel'),
-  newStatus:      document.getElementById('newStatus'),
-  newNotes:       document.getElementById('newNotes'),
-
-  btnAddDrum:     document.getElementById('btnAddDrum'),
-  btnUpdateDrum:  document.getElementById('btnUpdateDrum'),
-  btnCancelEdit:  document.getElementById('btnCancelEdit'),
+  newDrums:       document.getElementById('newDrums'),
+  btnAddFuel:     document.getElementById('btnAddFuel'),
   btnClearForm:   document.getElementById('btnClearForm'),
-
   statusBar:      document.getElementById('statusBar'),
   status:         document.getElementById('status'),
   emptyTally:     document.getElementById('emptyTally'),
   inventoryRoot:  document.getElementById('inventoryRoot'),
-
+  // use dialog
+  useDialog:      document.getElementById('useDialog'),
+  useDialogFuel:  document.getElementById('useDialogFuel'),
+  useDialogCont:  document.getElementById('useDialogContainer'),
+  useStatDrums:   document.getElementById('useStatDrums'),
+  useStatGals:    document.getElementById('useStatGals'),
+  useAmount:      document.getElementById('useAmount'),
+  usePreview:     document.getElementById('usePreview'),
+  useConfirmBtn:  document.getElementById('useConfirmBtn'),
+  useCancelBtn:   document.getElementById('useCancelBtn'),
+  useDialogClose: document.getElementById('useDialogClose'),
+  // sync dialog
   syncDialog:     document.getElementById('syncDialog'),
   syncNameInput:  document.getElementById('syncNameInput'),
   syncSave:       document.getElementById('syncSave'),
   syncCancel:     document.getElementById('syncCancel'),
 };
 
-let project = localStorage.getItem('fuel_project') || '';
-let drums = [];
-let editingId = null;
+let project     = localStorage.getItem('fuel_project') || '';
+let rows        = [];   // flat array of {id, container, fuelType, drums, gallons}
 let pendingAction = null;
 
-// ── Utilities ──────────────────────────────────────────────────────────────
+// Active "Use" context
+let useCtx = null; // {id, container, fuelType, drums, gallons}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
 
 function setStatus(msg, isError = false) {
   els.status.textContent = msg;
@@ -52,35 +67,40 @@ function sanitizeProject(s) {
   return String(s).trim().replace(/\s+/g, ' ').slice(0, 80).replace(/[^\w .\-]/g, '');
 }
 
-function safeNum(v) {
-  const n = parseFloat(String(v).replace(/[^\d.]/g, ''));
-  return isNaN(n) ? null : n;
-}
-
-function escapeHtml(s) {
+function escHtml(s) {
   return String(s ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
+    .replaceAll('&','&amp;').replaceAll('<','&lt;')
+    .replaceAll('>','&gt;').replaceAll('"','&quot;');
 }
 
-function fuelClass(fuel) {
-  const map = {
-    'IPA': 'fuel-IPA', 'Heptane': 'fuel-Heptane', 'Hexane': 'fuel-Hexane',
-    '87': 'fuel-87', 'Jet A': 'fuel-JetA', 'Ethanol': 'fuel-Ethanol',
-    'Diesel': 'fuel-Diesel', 'Kerosene': 'fuel-Kerosene',
-  };
-  return map[fuel] || 'fuel-IPA';
+function safeInt(v, fallback = 0) {
+  const n = parseInt(String(v).replace(/\D/g,''), 10);
+  return isNaN(n) ? fallback : n;
 }
 
-function levelClass(pct) {
-  if (pct <= 20) return 'low';
-  if (pct <= 50) return 'mid';
-  return 'high';
+function safeFloat(v) {
+  const n = parseFloat(String(v).replace(/[^\d.]/g,''));
+  return isNaN(n) ? 0 : n;
 }
 
-// ── Project / Sync Name ────────────────────────────────────────────────────
+// ── API ────────────────────────────────────────────────────────────────────
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: { 'content-type': 'application/json' },
+    ...opts,
+  });
+  const text = await res.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  if (!res.ok) {
+    const msg = data?.error || data?.message || (typeof data?.raw === 'string' ? data.raw.slice(0,200) : 'Request failed');
+    throw new Error(`${msg} (HTTP ${res.status})`);
+  }
+  return data;
+}
+
+// ── Sync / Project ─────────────────────────────────────────────────────────
 
 function renderProject() {
   els.projectLabel.textContent = project || 'Not set';
@@ -113,93 +133,83 @@ els.syncSave.addEventListener('click', async () => {
   localStorage.setItem('fuel_project', project);
   renderProject();
   closeSyncDialog();
-
   const action = pendingAction;
   pendingAction = null;
-
-  if (action === 'add') { await doAddDrum(); return; }
+  if (action === 'add') { await doAdd(); return; }
   if (action === 'export') { await doExport(); return; }
   clearForm();
   await refresh();
   setStatus('Sync Name set.');
 });
 
-els.syncCancel.addEventListener('click', () => {
-  pendingAction = null;
-  closeSyncDialog();
-});
+els.syncCancel.addEventListener('click', () => { pendingAction = null; closeSyncDialog(); });
 
-// Close dialog on backdrop click (iOS-friendly)
 els.syncDialog.addEventListener('click', e => {
-  const rect = els.syncDialog.getBoundingClientRect();
-  if (e.clientX < rect.left || e.clientX > rect.right ||
-      e.clientY < rect.top  || e.clientY > rect.bottom) {
-    pendingAction = null;
-    closeSyncDialog();
+  const r = els.syncDialog.getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) {
+    pendingAction = null; closeSyncDialog();
   }
 });
 
-// ── API ────────────────────────────────────────────────────────────────────
-
-async function api(path, opts = {}) {
-  const res = await fetch(path, {
-    headers: { 'content-type': 'application/json' },
-    ...opts,
-  });
-  const text = await res.text();
-  let data = {};
-  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
-  if (!res.ok) {
-    const msg = data?.error || data?.message || (typeof data?.raw === 'string' ? data.raw.slice(0, 200) : 'Request failed');
-    throw new Error(`${msg} (HTTP ${res.status})`);
-  }
-  return data;
-}
-
-// ── Form Helpers ───────────────────────────────────────────────────────────
-
-function getFormData() {
-  return {
-    container: (els.newContainer.value || '').trim() || 'Default',
-    fuelType: els.newFuelType.value || '',
-    label: (els.newDrumLabel.value || '').trim(),
-    capacity: safeNum(els.newCapacity.value),
-    level: safeNum(els.newLevel.value) ?? 0,
-    status: els.newStatus.value || 'in-use',
-    notes: (els.newNotes.value || '').trim(),
-  };
-}
-
-function setFormData(d) {
-  els.newContainer.value  = d?.container || '';
-  els.newFuelType.value   = d?.fuelType  || '';
-  els.newDrumLabel.value  = d?.label     || '';
-  els.newCapacity.value   = d?.capacity != null ? String(d.capacity) : '';
-  els.newLevel.value      = d?.level != null    ? String(d.level)    : '';
-  els.newStatus.value     = d?.status    || 'in-use';
-  els.newNotes.value      = d?.notes     || '';
-}
+// ── Form ───────────────────────────────────────────────────────────────────
 
 function clearForm() {
-  setFormData({});
-  els.newStatus.value    = 'in-use';
-  els.newCapacity.value  = '55';   // default 55 gal drums
-  editingId = null;
-  els.btnAddDrum.style.display    = '';
-  els.btnUpdateDrum.style.display = 'none';
-  els.btnCancelEdit.style.display = 'none';
-  document.querySelectorAll('.drumCard.editing').forEach(c => c.classList.remove('editing'));
+  els.newContainer.value = '';
+  els.newFuelType.value  = '';
+  els.newDrums.value     = '1';
 }
 
 els.btnClearForm.addEventListener('click', () => { clearForm(); setStatus('Cleared.'); });
 
+// ── Add Fuel ───────────────────────────────────────────────────────────────
+
+async function doAdd() {
+  const container = (els.newContainer.value || '').trim() || 'Default';
+  const fuelType  = els.newFuelType.value || '';
+  const drums     = safeInt(els.newDrums.value, 1);
+
+  if (!fuelType)   return setStatus('Select a fuel type.', true);
+  if (drums < 1)   return setStatus('Enter at least 1 drum.', true);
+
+  // Check if this container+fuel combo already exists — merge instead of duplicate
+  const existing = rows.find(r => r.container === container && r.fuelType === fuelType);
+
+  try {
+    setStatus('Saving…');
+    if (existing) {
+      // Add to existing row
+      const newDrums   = existing.drums + drums;
+      const newGallons = existing.gallons + (drums * DRUM_GAL);
+      await api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(existing.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ drums: newDrums, gallons: newGallons }),
+      });
+    } else {
+      await api(`/api/fuel?project=${encodeURIComponent(project)}`, {
+        method: 'POST',
+        body: JSON.stringify({ row: { container, fuelType, drums, gallons: drums * DRUM_GAL } }),
+      });
+    }
+    await refresh();
+    clearForm();
+    setStatus(existing ? `Added ${drums} drum(s) to existing ${fuelType} in ${container}.` : `Added ${drums} drum(s) of ${fuelType} to ${container}.`);
+  } catch (e) {
+    setStatus(e.message, true);
+  }
+}
+
+els.btnAddFuel.addEventListener('click', () => {
+  if (!ensureProject('add')) return;
+  doAdd();
+});
+
 // ── Refresh / Render ───────────────────────────────────────────────────────
 
 async function refresh() {
-  if (!project) { drums = []; renderInventory(); return; }
+  if (!project) { rows = []; renderInventory(); return; }
   try {
     const data = await api(`/api/fuel?project=${encodeURIComponent(project)}`);
-    drums = Array.isArray(data.drums) ? data.drums : [];
+    rows = Array.isArray(data.rows) ? data.rows : [];
     renderInventory();
   } catch (e) {
     setStatus(e.message, true);
@@ -211,174 +221,234 @@ function renderInventory() {
   const root = els.inventoryRoot;
   root.innerHTML = '';
 
-  const emptyCount = drums.filter(d => d.status === 'empty').length;
-  els.emptyTally.textContent = emptyCount > 0 ? `${emptyCount} empty drum${emptyCount === 1 ? '' : 's'}` : '';
+  const emptyCount = rows.filter(r => r.drums <= 0).length;
+  els.emptyTally.textContent = emptyCount > 0
+    ? `${emptyCount} fuel${emptyCount > 1 ? 's' : ''} depleted`
+    : '';
 
-  if (drums.length === 0) {
-    root.innerHTML = `<div class="emptyState"><h3>No drums yet</h3><p>Add your first drum using the form above.</p></div>`;
+  if (rows.length === 0) {
+    root.innerHTML = `<div class="emptyState"><h3>No fuel inventory yet</h3><p>Add drums using the form above.</p></div>`;
     return;
   }
 
   // Group by container
   const groups = {};
-  for (const d of drums) {
-    const key = d.container || 'Default';
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(d);
+  for (const r of rows) {
+    const k = r.container || 'Default';
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(r);
   }
 
-  // Sort containers alphabetically
-  const sortedKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+  const sortedContainers = Object.keys(groups).sort((a, b) => a.localeCompare(b));
 
-  for (const key of sortedKeys) {
-    const grpDrums = groups[key];
-    const groupEl = document.createElement('div');
-    groupEl.className = 'containerGroup';
+  for (const cName of sortedContainers) {
+    const cRows = groups[cName];
+    cRows.sort((a, b) => FUEL_TYPES.indexOf(a.fuelType) - FUEL_TYPES.indexOf(b.fuelType));
 
+    const totalDrums = cRows.reduce((s, r) => s + (r.drums || 0), 0);
+
+    const block = document.createElement('div');
+    block.className = 'containerBlock';
+
+    // Container header
     const hdr = document.createElement('div');
     hdr.className = 'containerHeader';
     hdr.innerHTML = `
-      <span class="containerName">${escapeHtml(key)}</span>
+      <span class="containerName">${escHtml(cName)}</span>
       <span class="containerLine"></span>
-      <span class="containerCount">${grpDrums.length} drum${grpDrums.length === 1 ? '' : 's'}</span>
+      <span class="containerMeta">${totalDrums} drum${totalDrums !== 1 ? 's' : ''} · ${cRows.length} fuel${cRows.length !== 1 ? 's' : ''}</span>
     `;
-    groupEl.appendChild(hdr);
+    block.appendChild(hdr);
 
-    const grid = document.createElement('div');
-    grid.className = 'drumGrid';
+    // Table
+    const wrap = document.createElement('div');
+    wrap.className = 'tableWrap';
 
-    for (const drum of grpDrums) {
-      grid.appendChild(makeDrumCard(drum));
+    const table = document.createElement('table');
+    table.className = 'fuelTable';
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Fuel Type</th>
+          <th class="center">Drums</th>
+          <th>Gallons Remaining</th>
+          <th class="center">Status</th>
+          <th class="center">Use</th>
+          <th></th>
+        </tr>
+      </thead>
+    `;
+
+    const tbody = document.createElement('tbody');
+
+    for (const row of cRows) {
+      const drums   = row.drums   || 0;
+      const gallons = row.gallons || 0;
+      const maxGal  = drums * DRUM_GAL;  // theoretical max for bar (use stored drums as reference)
+      // Bar is relative to full drums worth
+      const totalGalForBar = Math.max(row.drums, Math.ceil(gallons / DRUM_GAL)) * DRUM_GAL;
+      const pct = totalGalForBar > 0 ? Math.min(100, Math.round((gallons / totalGalForBar) * 100)) : 0;
+
+      let fillClass = 'high';
+      if (pct <= 20) fillClass = 'low';
+      else if (pct <= 50) fillClass = 'mid';
+
+      let chipClass = 'chip-ok', chipLabel = 'OK';
+      if (drums <= 0)    { chipClass = 'chip-empty'; chipLabel = 'Depleted'; }
+      else if (drums <= 1 && pct <= 30) { chipClass = 'chip-low'; chipLabel = 'Low'; }
+
+      const dotColor = FUEL_COLORS[row.fuelType] || '#888';
+      const galStr   = gallons % 1 === 0 ? gallons : gallons.toFixed(1);
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <div class="fuelTypeName">
+            <span class="fuelDot" style="background:${dotColor}"></span>
+            <strong>${escHtml(row.fuelType)}</strong>
+          </div>
+        </td>
+        <td class="center">
+          <div class="drumCount">${drums}</div>
+          <div class="drumCountSub">× 55 gal</div>
+        </td>
+        <td>
+          <div class="galWrap">
+            <div class="galLabel">
+              <span>${galStr} gal</span>
+              <span>${pct}%</span>
+            </div>
+            <div class="galBar"><div class="galFill ${fillClass}" style="width:${pct}%"></div></div>
+          </div>
+        </td>
+        <td class="center">
+          <span class="statusChip ${chipClass}">${chipLabel}</span>
+        </td>
+        <td class="center">
+          <button class="btn useBtn" data-act="use" type="button"${drums <= 0 ? ' disabled' : ''}>Use</button>
+        </td>
+        <td class="center">
+          <button class="deleteRowBtn" data-act="delete" type="button" title="Remove row">✕</button>
+        </td>
+      `;
+
+      tr.querySelector('[data-act="use"]')?.addEventListener('click', () => openUseDialog(row));
+      tr.querySelector('[data-act="delete"]')?.addEventListener('click', () => deleteRow(row.id, row.fuelType, cName));
+
+      tbody.appendChild(tr);
     }
 
-    groupEl.appendChild(grid);
-    root.appendChild(groupEl);
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    block.appendChild(wrap);
+    root.appendChild(block);
   }
 }
 
-function makeDrumCard(drum) {
-  const cap = drum.capacity;
-  const lvl = drum.level ?? 0;
-  const pct = (cap && cap > 0) ? Math.min(100, Math.round((lvl / cap) * 100)) : 0;
-  const capStr = cap != null ? `${cap} gal` : '— gal';
-  const lvlStr = `${lvl} gal`;
-  const lcls = levelClass(pct);
-  const fcls = fuelClass(drum.fuelType);
-  const statusLabel = STATUS_LABELS[drum.status] || drum.status;
+// ── Delete Row ─────────────────────────────────────────────────────────────
 
-  const card = document.createElement('div');
-  card.className = 'drumCard';
-  card.dataset.id = drum.id;
-  card.dataset.status = drum.status || 'in-use';
-
-  card.innerHTML = `
-    <div class="drumTop">
-      <div class="drumLabel">${escapeHtml(drum.label || 'Drum')}</div>
-      <span class="drumFuelBadge ${fcls}">${escapeHtml(drum.fuelType || '—')}</span>
-    </div>
-    <div class="levelWrap">
-      <div class="levelLabel">
-        <span>${lvlStr}</span>
-        <span>${cap != null ? pct + '%' : '—'}</span>
-        <span>${capStr}</span>
-      </div>
-      <div class="levelBar"><div class="levelFill ${lcls}" style="width:${pct}%"></div></div>
-    </div>
-    <div>
-      <span class="statusBadge status-${drum.status || 'in-use'}">${escapeHtml(statusLabel)}</span>
-    </div>
-    ${drum.notes ? `<div class="drumNotes" title="${escapeHtml(drum.notes)}">${escapeHtml(drum.notes)}</div>` : ''}
-    <div class="drumActions">
-      <button class="btn ghost" data-act="edit" type="button">Edit</button>
-      <button class="btn danger ghost" data-act="delete" type="button">Delete</button>
-    </div>
-  `;
-
-  if (editingId === drum.id) card.classList.add('editing');
-
-  card.querySelector('[data-act="edit"]').addEventListener('click', () => loadDrumForEdit(drum));
-  card.querySelector('[data-act="delete"]').addEventListener('click', () => deleteDrum(drum.id, drum.label));
-
-  return card;
-}
-
-// ── CRUD ───────────────────────────────────────────────────────────────────
-
-function loadDrumForEdit(drum) {
-  setFormData(drum);
-  editingId = drum.id;
-  els.btnAddDrum.style.display    = 'none';
-  els.btnUpdateDrum.style.display = '';
-  els.btnCancelEdit.style.display = '';
-  renderInventory(); // re-render to show editing highlight
-  els.newContainer.focus();
-  setStatus('Editing drum — make changes and click Save Edit.');
-}
-
-async function doAddDrum() {
-  const d = getFormData();
-  if (!d.fuelType) return setStatus('Select a fuel type.', true);
-  if (!d.label) return setStatus('Enter a drum label.', true);
-
-  try {
-    setStatus('Saving…');
-    await api(`/api/fuel?project=${encodeURIComponent(project)}`, {
-      method: 'POST',
-      body: JSON.stringify({ drum: d }),
-    });
-    await refresh();
-    clearForm();
-    setStatus('Drum added.');
-  } catch (e) {
-    setStatus(e.message, true);
-  }
-}
-
-async function doUpdateDrum() {
-  if (!editingId) return;
-  const d = getFormData();
-  if (!d.fuelType) return setStatus('Select a fuel type.', true);
-  if (!d.label) return setStatus('Enter a drum label.', true);
-
-  try {
-    setStatus('Updating…');
-    await api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(editingId)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ drum: d }),
-    });
-    await refresh();
-    clearForm();
-    setStatus('Drum updated.');
-  } catch (e) {
-    setStatus(e.message, true);
-  }
-}
-
-async function deleteDrum(id, label) {
-  const ok = confirm(`Delete drum "${label || id}"?`);
+async function deleteRow(id, fuelType, container) {
+  const ok = confirm(`Remove ${fuelType} from ${container}?`);
   if (!ok) return;
   try {
-    setStatus('Deleting…');
+    setStatus('Removing…');
     await api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-    if (editingId === id) clearForm();
     await refresh();
-    setStatus('Drum deleted.');
+    setStatus('Removed.');
   } catch (e) {
     setStatus(e.message, true);
   }
 }
 
-els.btnAddDrum.addEventListener('click', () => {
-  if (!ensureProject('add')) return;
-  doAddDrum();
+// ── Use Dialog ─────────────────────────────────────────────────────────────
+
+function openUseDialog(row) {
+  useCtx = { ...row };
+  els.useDialogFuel.textContent = row.fuelType;
+  els.useDialogCont.textContent = row.container;
+  els.useStatDrums.textContent  = row.drums;
+  const galStr = (row.gallons % 1 === 0) ? row.gallons : row.gallons.toFixed(1);
+  els.useStatGals.textContent   = galStr;
+  els.useAmount.value           = '';
+  els.usePreview.textContent    = '';
+  els.usePreview.className      = 'usePreview';
+  els.useDialog.showModal();
+  setTimeout(() => els.useAmount.focus(), 80);
+}
+
+function closeUseDialog() {
+  if (els.useDialog.open) els.useDialog.close();
+  useCtx = null;
+}
+
+function updateUsePreview() {
+  if (!useCtx) return;
+  const used = safeFloat(els.useAmount.value);
+  if (!used || used <= 0) { els.usePreview.textContent = ''; els.usePreview.className = 'usePreview'; return; }
+
+  const newGallons  = Math.max(0, useCtx.gallons - used);
+  const drumsUsed   = Math.floor((useCtx.gallons - newGallons) / DRUM_GAL +
+                       (useCtx.gallons % DRUM_GAL < (useCtx.gallons - newGallons) % DRUM_GAL ? 0 : 0));
+  // How many full drums are consumed by this subtraction
+  const oldFullDrums = Math.ceil(useCtx.gallons / DRUM_GAL);
+  const newFullDrums = Math.ceil(newGallons / DRUM_GAL);
+  const drumDelta    = oldFullDrums - newFullDrums;
+
+  let msg = `→ ${newGallons % 1 === 0 ? newGallons : newGallons.toFixed(1)} gal remaining`;
+  if (drumDelta > 0) msg += `, ${drumDelta} drum${drumDelta > 1 ? 's' : ''} emptied`;
+
+  const newDrums = Math.max(0, useCtx.drums - drumDelta);
+
+  if (used > useCtx.gallons) {
+    els.usePreview.textContent = `⚠ Exceeds available gallons (${useCtx.gallons} gal)`;
+    els.usePreview.className   = 'usePreview danger';
+  } else {
+    els.usePreview.textContent = msg;
+    els.usePreview.className   = newDrums === 0 ? 'usePreview warn' : 'usePreview';
+  }
+}
+
+els.useAmount.addEventListener('input', updateUsePreview);
+
+els.useConfirmBtn.addEventListener('click', async () => {
+  if (!useCtx) return;
+  const used = safeFloat(els.useAmount.value);
+  if (!used || used <= 0) return setStatus('Enter gallons used.', true);
+  if (used > useCtx.gallons) return setStatus(`Only ${useCtx.gallons} gal available.`, true);
+
+  const newGallons   = Math.max(0, Math.round((useCtx.gallons - used) * 100) / 100);
+  const oldFullDrums = Math.ceil(useCtx.gallons / DRUM_GAL);
+  const newFullDrums = newGallons > 0 ? Math.ceil(newGallons / DRUM_GAL) : 0;
+  const drumDelta    = oldFullDrums - newFullDrums;
+  const newDrums     = Math.max(0, useCtx.drums - drumDelta);
+
+  try {
+    closeUseDialog();
+    setStatus('Updating…');
+    await api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(useCtx.id)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ drums: newDrums, gallons: newGallons }),
+    });
+    await refresh();
+    const drumMsg = drumDelta > 0 ? ` (${drumDelta} drum${drumDelta > 1 ? 's' : ''} emptied)` : '';
+    setStatus(`Subtracted ${used} gal from ${useCtx.fuelType}${drumMsg}.`);
+  } catch (e) {
+    setStatus(e.message, true);
+  }
 });
 
-els.btnUpdateDrum.addEventListener('click', () => {
-  if (!ensureProject()) return;
-  doUpdateDrum();
+els.useCancelBtn.addEventListener('click', closeUseDialog);
+els.useDialogClose.addEventListener('click', closeUseDialog);
+
+els.useDialog.addEventListener('click', e => {
+  const r = els.useDialog.getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeUseDialog();
 });
 
-els.btnCancelEdit.addEventListener('click', () => { clearForm(); setStatus('Edit cancelled.'); });
+// Confirm on Enter key in amount field
+els.useAmount.addEventListener('keydown', e => {
+  if (e.key === 'Enter') els.useConfirmBtn.click();
+});
 
 // ── Export CSV ─────────────────────────────────────────────────────────────
 
@@ -393,22 +463,18 @@ async function doExport() {
   try {
     setStatus('Exporting…');
     const data = await api(`/api/fuel/export?project=${encodeURIComponent(project)}`);
-    const rows = Array.isArray(data.drums) ? data.drums : [];
+    const exportRows = Array.isArray(data.rows) ? data.rows : [];
 
-    const headers = ['Container','Label','Fuel Type','Status','Level (gal)','Capacity (gal)','% Full','Notes'];
-    const lines = [headers.join(',')];
-    for (const r of rows) {
-      const cap = r.capacity ?? '';
-      const lvl = r.level ?? 0;
-      const pct = (cap && cap > 0) ? Math.round((lvl / cap) * 100) : '';
-      lines.push([r.container, r.label, r.fuelType, r.status, lvl, cap, pct, r.notes || ''].map(csvCell).join(','));
+    const headers = ['Container', 'Fuel Type', 'Drums', 'Gallons Remaining'];
+    const lines   = [headers.join(',')];
+    for (const r of exportRows) {
+      lines.push([r.container, r.fuelType, r.drums, r.gallons].map(csvCell).join(','));
     }
-    const csv = lines.join('\n');
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `fuel-inventory-${project.replace(/\s+/g, '_')}.csv`;
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `fuel-inventory-${project.replace(/\s+/g,'_')}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -421,10 +487,10 @@ async function doExport() {
 
 els.btnExportCsv.addEventListener('click', doExport);
 
-// ── Error handling ─────────────────────────────────────────────────────────
+// ── Error Handling ─────────────────────────────────────────────────────────
 
-window.addEventListener('error', e => { setStatus(`JS error: ${e.message || 'unknown'}`, true); });
-window.addEventListener('unhandledrejection', e => { setStatus(`Error: ${String(e.reason || 'unknown')}`, true); });
+window.addEventListener('error', e => setStatus(`JS error: ${e.message || 'unknown'}`, true));
+window.addEventListener('unhandledrejection', e => setStatus(`Error: ${String(e.reason || 'unknown')}`, true));
 
 // ── Startup ────────────────────────────────────────────────────────────────
 
@@ -440,6 +506,6 @@ window.addEventListener('unhandledrejection', e => { setStatus(`Error: ${String(
     try {
       await refresh();
       if (els.statusBar.dataset.error !== '1') setStatus('Ready.');
-    } catch (_) { /* error shown by refresh */ }
+    } catch (_) {}
   }
 })();
