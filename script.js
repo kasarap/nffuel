@@ -852,7 +852,7 @@ function renderEmpties() {
 
   const tbody = document.createElement('tbody');
 
-  for (const entry of empties) {
+  for (const entry of [...empties].sort((a,b) => (a.fuelType||"").localeCompare(b.fuelType||""))) {
     const dotColor = fuelColor(entry.fuelType);
 
     const tr = document.createElement('tr');
@@ -996,7 +996,7 @@ function renderEditEmptyBody() {
     // Fall through — still render the add-row so the user can add entries
   }
 
-  for (const entry of empties) {
+  for (const entry of [...empties].sort((a,b) => (a.fuelType||"").localeCompare(b.fuelType||""))) {
     const dotColor = fuelColor(entry.fuelType);
     const div = document.createElement('div');
     div.className = 'editRow';
