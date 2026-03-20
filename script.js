@@ -602,31 +602,6 @@ function renderEditBody(cRows) {
 
     body.appendChild(div);
   }
-      <button class="deleteRowBtn editDeleteBtn" type="button" title="Remove">✕</button>
-    `;
-
-    div.querySelector('.editDeleteBtn').addEventListener('click', async () => {
-      const ok = confirm(`Remove ${row.fuelType} from ${editCtx}?`);
-      if (!ok) return;
-      try {
-        setStatus('Removing…');
-        await api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(row.id)}`, { method: 'DELETE' });
-        await refresh();
-        // Re-open dialog with updated rows for this container (if any remain)
-        const remaining = rows.filter(r => r.container === editCtx);
-        if (remaining.length > 0) {
-          renderEditBody(remaining);
-        } else {
-          closeEditDialog();
-        }
-        setStatus(`Removed ${row.fuelType} from ${editCtx}.`);
-      } catch (e) {
-        setStatus(e.message, true);
-      }
-    });
-
-    body.appendChild(div);
-  }
 
   // "Add fuel to this container" row
   const addDiv = document.createElement('div');
