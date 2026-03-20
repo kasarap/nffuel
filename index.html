@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Fuel Inventory | National Foam</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="wrap">
+
+    <header class="header">
+      <div class="headerLeft">
+        <h1><span style="color:#E8003D;font-weight:900;">NF</span> Fuel Inventory</h1>
+        <div class="meta">
+          <span>Sync Name:</span>
+          <span id="projectLabel" class="pill">Not set</span>
+          <button id="btnSetProject" class="linkbtn" type="button">Change</button>
+        </div>
+      </div>
+      <div class="headerRight">
+        <button id="btnExportCsv" class="btn ghost" type="button">Export CSV</button>
+      </div>
+    </header>
+
+    <!-- Add Drum / Container Controls -->
+    <section class="card addCard">
+      <div class="addGrid">
+
+        <div class="field">
+          <div class="lbl">Container</div>
+          <input id="newContainer" type="text" placeholder="e.g. Cage A, Shed 1" autocomplete="off" />
+        </div>
+
+        <div class="field">
+          <div class="lbl">Fuel Type</div>
+          <select id="newFuelType">
+            <option value="" selected disabled>Select fuel</option>
+            <option>IPA</option>
+            <option>Heptane</option>
+            <option>Hexane</option>
+            <option>87</option>
+            <option>Jet A</option>
+            <option>Ethanol</option>
+            <option>Diesel</option>
+            <option>Kerosene</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <div class="lbl">Drum Label</div>
+          <input id="newDrumLabel" type="text" placeholder="e.g. D-01, Drum 3" autocomplete="off" />
+        </div>
+
+        <div class="field">
+          <div class="lbl">Capacity (gal)</div>
+          <input id="newCapacity" type="text" inputmode="decimal" placeholder="55" value="55" />
+        </div>
+
+        <div class="field">
+          <div class="lbl">Current Level (gal)</div>
+          <input id="newLevel" type="text" inputmode="decimal" placeholder="0" />
+        </div>
+
+        <div class="field">
+          <div class="lbl">Status</div>
+          <select id="newStatus">
+            <option value="in-use">In Use</option>
+            <option value="empty">Empty</option>
+            <option value="full">Full</option>
+            <option value="reserved">Reserved</option>
+          </select>
+        </div>
+
+        <div class="field fieldNotes">
+          <div class="lbl">Notes</div>
+          <input id="newNotes" type="text" placeholder="Optional notes" autocomplete="off" />
+        </div>
+
+        <div class="addButtons">
+          <button id="btnAddDrum" class="btn primary" type="button">+ Add Drum</button>
+          <button id="btnUpdateDrum" class="btn accent" type="button" style="display:none">Save Edit</button>
+          <button id="btnCancelEdit" class="btn ghost" type="button" style="display:none">Cancel</button>
+          <button id="btnClearForm" class="btn ghost" type="button">Clear</button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Status Bar -->
+    <div id="statusBar" class="statusBar" data-error="0">
+      <div class="statusBarInner">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="statusDot" aria-hidden="true"></span>
+          <span id="status" class="statusText">Loading…</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="emptyTally" class="tally" title="Empty drums"></span>
+          <span class="pill">V2</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inventory Grid -->
+    <div id="inventoryRoot" class="inventoryRoot"></div>
+
+  </main>
+
+  <!-- Sync Name Dialog -->
+  <dialog id="syncDialog" class="dialog">
+    <div class="dialogCard">
+      <h2>Set Sync Name</h2>
+      <p>Used to sync inventory across devices. Use the same name on every device.</p>
+      <input id="syncNameInput" type="text" placeholder="e.g. FuelYard-Main" autocomplete="off" />
+      <div class="dialogBtns">
+        <button id="syncCancel" class="btn ghost" type="button">Cancel</button>
+        <button id="syncSave" class="btn primary" type="button">Save</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script defer src="script.js?v=v2"></script>
+</body>
+</html>
