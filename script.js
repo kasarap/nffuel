@@ -834,9 +834,6 @@ function renderEmpties() {
   table.innerHTML = `
     <thead>
       <tr>
-        <th>Date</th>
-        <th>Time</th>
-        <th>Container</th>
         <th>Fuel Type</th>
         <th class="center">Drums</th>
         <th></th>
@@ -847,16 +844,10 @@ function renderEmpties() {
   const tbody = document.createElement('tbody');
 
   for (const entry of empties) {
-    const dt      = entry.emptiedAt ? new Date(entry.emptiedAt) : null;
-    const dateStr = dt ? dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
-    const timeStr = dt ? dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
     const dotColor = fuelColor(entry.fuelType);
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td style="color:var(--muted);font-size:12px;">${dateStr}</td>
-      <td style="color:var(--muted);font-size:12px;">${timeStr}</td>
-      <td>${escHtml(entry.container)}</td>
       <td>
         <div class="fuelTypeName">
           <span class="fuelDot" style="background:${dotColor}"></span>
@@ -1005,7 +996,6 @@ function renderEditEmptyBody() {
       <div class="editRowFuel" style="flex:1.5">
         <span class="fuelDot" style="background:${dotColor}"></span>
         <span class="editFuelName">${escHtml(entry.fuelType)}</span>
-        <span style="font-size:11px;color:var(--muted);margin-left:6px;">${escHtml(entry.container)}</span>
       </div>
       <div class="editField">
         <label class="lbl">Drums</label>
@@ -1050,10 +1040,6 @@ function renderEditEmptyBody() {
       </select>
     </div>
     <div class="editField">
-      <label class="lbl">Container</label>
-      <input id="editEmptyNewContainer" type="text" placeholder="e.g. Cage A" />
-    </div>
-    <div class="editField">
       <label class="lbl">Drums</label>
       <input id="editEmptyNewCount" type="text" inputmode="numeric" placeholder="1" value="1" />
     </div>
@@ -1061,15 +1047,14 @@ function renderEditEmptyBody() {
   `;
 
   addDiv.querySelector('#editEmptyAddBtn').addEventListener('click', async () => {
-    const fuelType  = addDiv.querySelector('#editEmptyNewFuelType').value;
-    const container = (addDiv.querySelector('#editEmptyNewContainer').value || '').trim() || 'Default';
-    const count     = Math.max(1, safeInt(addDiv.querySelector('#editEmptyNewCount').value, 1));
+    const fuelType = addDiv.querySelector('#editEmptyNewFuelType').value;
+    const count    = Math.max(1, safeInt(addDiv.querySelector('#editEmptyNewCount').value, 1));
     if (!fuelType) return setStatus('Select a fuel type.', true);
     try {
       setStatus('Adding…');
       await api(`/api/empties?project=${encodeURIComponent(project)}`, {
         method: 'POST',
-        body: JSON.stringify({ entry: { container, fuelType, count } }),
+        body: JSON.stringify({ entry: { container: '', fuelType, count } }),
       });
       const emptyData = await api(`/api/empties?project=${encodeURIComponent(project)}`);
       empties = Array.isArray(emptyData.entries) ? emptyData.entries : [];
