@@ -21,19 +21,33 @@ export async function onRequest(context) {
     return json({ project, entries: data.entries });
   }
 
-  // POST — add one or more emptied drum entries
+  // POST — add emptied drums, merging into existing row if same container+fuel
   if (method === 'POST') {
     const body = await request.json().catch(() => null);
     if (!body?.entry) return json({ error: 'Missing entry' }, 400);
 
+    const container = safeStr(body.entry.container) || 'Default';
+    const fuelType  = safeStr(body.entry.fuelType);
+    const count     = Math.max(1, parseInt(body.entry.count, 10) || 1);
+
     const data = await readLog(kv, key);
-    const now  = new Date().toISOString();
+
+    // Find existing entry for same container + fuel
+    const existing = data.entries.find(e => e.container === container && e.fuelType === fuelType);
+
+    if (existing) {
+      existing.count     += count;
+      existing.emptiedAt  = new Date().toISOString(); // update timestamp to latest
+      await kv.put(key, JSON.stringify(data));
+      return json({ ok: true, entry: existing });
+    }
+
     const newEntry = {
-      id:         crypto.randomUUID(),
-      emptiedAt:  now,
-      container:  safeStr(body.entry.container) || 'Default',
-      fuelType:   safeStr(body.entry.fuelType),
-      count:      Math.max(1, parseInt(body.entry.count, 10) || 1),
+      id:        crypto.randomUUID(),
+      emptiedAt: new Date().toISOString(),
+      container,
+      fuelType,
+      count,
     };
     data.entries.push(newEntry);
     await kv.put(key, JSON.stringify(data));
