@@ -38,13 +38,16 @@
         </div>
         <div class="statusRight">
           <span id="emptyTally" class="tally"></span>
-          <span class="pill">V10</span>
+          <span class="pill">V12</span>
         </div>
       </div>
     </div>
 
     <!-- Container Tables -->
     <div id="inventoryRoot" class="inventoryRoot"></div>
+
+    <!-- Salt Pail Quantity -->
+    <div id="saltPailRoot" class="inventoryRoot" style="margin-top:8px;"></div>
 
     <!-- Empty Drum Log -->
     <div id="emptiesRoot" class="inventoryRoot" style="margin-top:8px;"></div>
@@ -164,6 +167,42 @@
     </div>
   </dialog>
 
+
+  <!-- Salt Pail Edit Dialog -->
+  <dialog id="saltPailDialog" class="dialog">
+    <div class="dialogCard">
+      <div class="dialogHeader">
+        <div class="dialogFuelName">Edit Salt Pail Quantity</div>
+        <button id="saltPailDialogClose" class="iconBtn" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="field">
+        <div class="lbl">Quantity (pails)</div>
+        <input id="saltPailInput" type="text" inputmode="numeric" placeholder="0" />
+      </div>
+      <div class="dialogBtns">
+        <button id="saltPailCancelBtn" class="btn ghost" type="button">Cancel</button>
+        <button id="saltPailSaveBtn" class="btn primary" type="button">Save</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Edit Empty Drum Log Dialog -->
+  <dialog id="editEmptyDialog" class="dialog">
+    <div class="dialogCard editDialogCard">
+      <div class="dialogHeader">
+        <div>
+          <div class="lbl" style="margin-bottom:2px">Editing Empty Drums</div>
+        </div>
+        <button id="editEmptyDialogClose" class="iconBtn" type="button" aria-label="Close">✕</button>
+      </div>
+      <div id="editEmptyDialogBody" class="editDialogBody"></div>
+      <div class="dialogBtns">
+        <button id="editEmptyCancelBtn" class="btn ghost" type="button">Cancel</button>
+        <button id="editEmptySaveBtn" class="btn primary" type="button">Save All</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Sync Name Dialog -->
   <dialog id="syncDialog" class="dialog">
     <div class="dialogCard">
@@ -177,6 +216,6 @@
     </div>
   </dialog>
 
-  <script defer src="script.js?v=v10"></script>
+  <script defer src="script.js?v=v12"></script>
 </body>
 </html>
