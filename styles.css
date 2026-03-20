@@ -320,8 +320,8 @@ table.fuelTable th.center { text-align: center; }
 table.fuelTable th:nth-child(1) { width: 28%; }  /* Fuel */
 table.fuelTable th:nth-child(2) { width: 14%; }  /* Drums */
 table.fuelTable th:nth-child(3) { width: 24%; }  /* Remaining */
-table.fuelTable th:nth-child(4) { width: 16%; }  /* Status */
-table.fuelTable th:nth-child(5) { width: 12%; }  /* Use */
+table.fuelTable th:nth-child(4) { width: 12%; }  /* Use */
+table.fuelTable th:nth-child(5) { width: 16%; }  /* Status */
 table.fuelTable th:nth-child(6) { width: 6%; }   /* ✕ */
 
 table.fuelTable tbody tr {
@@ -363,6 +363,8 @@ table.fuelTable td.center { text-align: center; }
 /* Remaining bar */
 .galWrap { display: grid; gap: 3px; min-width: 80px; }
 .galPct {
+  display: flex;
+  justify-content: space-between;
   font-size: 11px;
   font-weight: 500;
   color: var(--muted);
@@ -550,16 +552,22 @@ table.fuelTable td.center { text-align: center; }
   margin-bottom: 14px;
 }
 
-/* Each existing fuel row */
+/* Edit row — drums only + reset note */
 .editRow {
   display: grid;
-  grid-template-columns: 1.6fr 1fr 1fr auto;
+  grid-template-columns: 1.6fr 1fr auto auto;
   gap: 8px;
   align-items: center;
   padding: 10px 12px;
   background: var(--card2);
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+.editRowNote {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-style: italic;
 }
 .editRowFuel {
   display: flex;
@@ -604,6 +612,45 @@ table.fuelTable td.center { text-align: center; }
   font-size: 12px;
 }
 
+/* ── Fuel Types Dialog ── */
+.fuelTypeList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.fuelTypeRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.fuelTypeName2 {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.fuelRemoveBtn {
+  color: var(--border2);
+  transition: color .15s;
+}
+.fuelRemoveBtn:hover { color: var(--accent); }
+
+.fuelAddRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.fuelAddRow input { flex: 1; }
+.fuelAddRow .btn { flex-shrink: 0; padding: 9px 16px; }
+
 /* ── Responsive ── */
 @media (max-width: 680px) {
   .wrap { width: calc(100vw - 16px); margin: 8px auto; }
@@ -623,6 +670,6 @@ table.fuelTable td.center { text-align: center; }
 
   /* Dialogs full-width on mobile */
   .editDialogCard { width: calc(100vw - 20px); }
-  .editRow { grid-template-columns: 1.4fr 1fr 1fr auto; gap: 6px; padding: 8px; }
+  .editRow { grid-template-columns: 1.4fr 1fr auto auto; gap: 6px; padding: 8px; }
   .editAddRow { grid-template-columns: 1.4fr 1fr auto; gap: 6px; padding: 8px; }
 }

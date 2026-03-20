@@ -1,11 +1,26 @@
-// Fuel Inventory — V3
-// Container tables, one row per fuel type, Use button subtracts gallons,
-// drum count decrements every 55 gal used. No drum label field.
+// Fuel Inventory — V10
 
-const DRUM_GAL    = 55;
-const FUEL_TYPES  = ['IPA','Heptane','Hexane','87','Jet A','Ethanol','Diesel','Kerosene'];
+const DRUM_GAL = 55;
 
-// Colour dots per fuel
+const DEFAULT_FUEL_TYPES = ['IPA','Heptane','Hexane','87','Jet A','Ethanol','Diesel','Kerosene'];
+
+function loadFuelTypes() {
+  try {
+    const stored = localStorage.getItem('fuel_types');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (_) {}
+  return [...DEFAULT_FUEL_TYPES];
+}
+
+function saveFuelTypes(list) {
+  localStorage.setItem('fuel_types', JSON.stringify(list));
+}
+
+let FUEL_TYPES = loadFuelTypes();
+
 const FUEL_COLORS = {
   'IPA':      '#60a5fa',
   'Heptane':  '#fbbf24',
@@ -17,15 +32,27 @@ const FUEL_COLORS = {
   'Kerosene': '#a5b4fc',
 };
 
+// Generate a stable colour for custom fuel types not in the map
+const EXTRA_COLORS = ['#f472b6','#34d399','#818cf8','#facc15','#38bdf8','#a78bfa','#fb923c','#4ade80'];
+function fuelColor(name) {
+  if (FUEL_COLORS[name]) return FUEL_COLORS[name];
+  // Hash name to a colour index
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
+  return EXTRA_COLORS[Math.abs(h) % EXTRA_COLORS.length];
+}
+
 const els = {
   projectLabel:   document.getElementById('projectLabel'),
   btnSetProject:  document.getElementById('btnSetProject'),
   btnExportCsv:   document.getElementById('btnExportCsv'),
-  btnAddContainer:document.getElementById('btnAddContainer'),
+  btnAddContainer:   document.getElementById('btnAddContainer'),
+  btnManageFuels:    document.getElementById('btnManageFuels'),
   statusBar:      document.getElementById('statusBar'),
   status:         document.getElementById('status'),
   emptyTally:     document.getElementById('emptyTally'),
   inventoryRoot:  document.getElementById('inventoryRoot'),
+  emptiesRoot:    document.getElementById('emptiesRoot'),
   // add dialog
   addDialog:      document.getElementById('addDialog'),
   addDialogClose: document.getElementById('addDialogClose'),
@@ -58,10 +85,18 @@ const els = {
   editSaveBtn:       document.getElementById('editSaveBtn'),
   editCancelBtn:     document.getElementById('editCancelBtn'),
   editAddFuelRow:    document.getElementById('editAddFuelRow'),
+  // manage fuel types dialog
+  fuelDialog:        document.getElementById('fuelDialog'),
+  fuelDialogClose:   document.getElementById('fuelDialogClose'),
+  fuelDialogList:    document.getElementById('fuelDialogList'),
+  fuelNewInput:      document.getElementById('fuelNewInput'),
+  fuelAddBtn:        document.getElementById('fuelAddBtn'),
+  fuelDoneBtn:       document.getElementById('fuelDoneBtn'),
 };
 
 let project     = localStorage.getItem('fuel_project') || '';
-let rows        = [];   // flat array of {id, container, fuelType, drums, gallons}
+let rows        = [];
+let empties     = [];   // log of emptied drums [{id, container, fuelType, count, emptiedAt}]
 let pendingAction = null;
 
 let useCtx  = null; // {id, container, fuelType, drums, gallons}
@@ -164,8 +199,8 @@ els.syncDialog.addEventListener('click', e => {
 
 function openAddDialog() {
   els.newContainer.value = '';
-  els.newFuelType.value  = '';
   els.newDrums.value     = '1';
+  buildFuelOptions(els.newFuelType);
   els.addDialog.showModal();
   setTimeout(() => els.newContainer.focus(), 80);
 }
@@ -233,11 +268,16 @@ async function doAdd() {
 // ── Refresh / Render ───────────────────────────────────────────────────────
 
 async function refresh() {
-  if (!project) { rows = []; renderInventory(); return; }
+  if (!project) { rows = []; empties = []; renderInventory(); renderEmpties(); return; }
   try {
-    const data = await api(`/api/fuel?project=${encodeURIComponent(project)}`);
-    rows = Array.isArray(data.rows) ? data.rows : [];
+    const [fuelData, emptyData] = await Promise.all([
+      api(`/api/fuel?project=${encodeURIComponent(project)}`),
+      api(`/api/empties?project=${encodeURIComponent(project)}`),
+    ]);
+    rows    = Array.isArray(fuelData.rows)      ? fuelData.rows      : [];
+    empties = Array.isArray(emptyData.entries)  ? emptyData.entries  : [];
     renderInventory();
+    renderEmpties();
   } catch (e) {
     setStatus(e.message, true);
     throw e;
@@ -301,8 +341,8 @@ function renderInventory() {
           <th>Fuel Type</th>
           <th class="center">Drums</th>
           <th>Remaining</th>
-          <th class="center">Status</th>
           <th class="center">Use</th>
+          <th class="center">Status</th>
           <th></th>
         </tr>
       </thead>
@@ -327,7 +367,7 @@ function renderInventory() {
       if (drums <= 0)    { chipClass = 'chip-empty'; chipLabel = 'Depleted'; }
       else if (drums <= 1 && pct <= 30) { chipClass = 'chip-low'; chipLabel = 'Low'; }
 
-      const dotColor = FUEL_COLORS[row.fuelType] || '#888';
+      const dotColor = fuelColor(row.fuelType);
       const galStr   = gallons % 1 === 0 ? gallons : gallons.toFixed(1);
 
       // Build tick marks: one per drum boundary (at 1/n, 2/n … (n-1)/n of bar width)
@@ -352,7 +392,7 @@ function renderInventory() {
         </td>
         <td>
           <div class="galWrap">
-            <div class="galPct">${galStr} gal</div>
+            <div class="galPct"><span>${galStr} gal</span><span>${Math.round(pct)}%</span></div>
             <div class="galBar">
               <div class="galFill ${fillClass}" style="width:${pct.toFixed(1)}%"></div>
               ${ticksHtml}
@@ -360,10 +400,10 @@ function renderInventory() {
           </div>
         </td>
         <td class="center">
-          <span class="statusChip ${chipClass}">${chipLabel}</span>
+          <button class="btn useBtn" data-act="use" type="button"${drums <= 0 ? ' disabled' : ''}>Use</button>
         </td>
         <td class="center">
-          <button class="btn useBtn" data-act="use" type="button"${drums <= 0 ? ' disabled' : ''}>Use</button>
+          <span class="statusChip ${chipClass}">${chipLabel}</span>
         </td>
         <td class="center">
           <button class="deleteRowBtn" data-act="delete" type="button" title="Remove row">✕</button>
@@ -471,6 +511,19 @@ els.useConfirmBtn.addEventListener('click', async () => {
       method: 'PUT',
       body: JSON.stringify({ drums: newDrums, gallons: newGallons }),
     });
+
+    // Log emptied drums
+    if (drumDelta > 0) {
+      await api(`/api/empties?project=${encodeURIComponent(project)}`, {
+        method: 'POST',
+        body: JSON.stringify({ entry: {
+          container: snap.container,
+          fuelType:  snap.fuelType,
+          count:     drumDelta,
+        }}),
+      });
+    }
+
     await refresh();
     const drumMsg = drumDelta > 0 ? ` (${drumDelta} drum${drumDelta > 1 ? 's' : ''} emptied)` : '';
     setStatus(`Subtracted ${used} gal from ${snap.fuelType}${drumMsg}.`);
@@ -511,7 +564,7 @@ function renderEditBody(cRows) {
     div.className = 'editRow';
     div.dataset.id = row.id;
 
-    const dotColor = FUEL_COLORS[row.fuelType] || '#888';
+    const dotColor = fuelColor(row.fuelType);
     div.innerHTML = `
       <div class="editRowFuel">
         <span class="fuelDot" style="background:${dotColor}"></span>
@@ -521,10 +574,31 @@ function renderEditBody(cRows) {
         <label class="lbl">Drums</label>
         <input class="editDrums" type="text" inputmode="numeric" value="${row.drums}" />
       </div>
-      <div class="editField">
-        <label class="lbl">Gallons</label>
-        <input class="editGallons" type="text" inputmode="decimal" value="${row.gallons}" />
-      </div>
+      <div class="editRowNote">resets to full</div>
+      <button class="deleteRowBtn editDeleteBtn" type="button" title="Remove">✕</button>
+    `;
+
+    div.querySelector('.editDeleteBtn').addEventListener('click', async () => {
+      const ok = confirm(`Remove ${row.fuelType} from ${editCtx}?`);
+      if (!ok) return;
+      try {
+        setStatus('Removing…');
+        await api(`/api/fuel?project=${encodeURIComponent(project)}&id=${encodeURIComponent(row.id)}`, { method: 'DELETE' });
+        await refresh();
+        const remaining = rows.filter(r => r.container === editCtx);
+        if (remaining.length > 0) {
+          renderEditBody(remaining);
+        } else {
+          closeEditDialog();
+        }
+        setStatus(`Removed ${row.fuelType} from ${editCtx}.`);
+      } catch (e) {
+        setStatus(e.message, true);
+      }
+    });
+
+    body.appendChild(div);
+  }
       <button class="deleteRowBtn editDeleteBtn" type="button" title="Remove">✕</button>
     `;
 
@@ -560,7 +634,7 @@ function renderEditBody(cRows) {
       <label class="lbl">Add Fuel Type</label>
       <select id="editNewFuelType">
         <option value="" disabled selected>Select fuel</option>
-        ${FUEL_TYPES.map(f => `<option value="${f}">${f}</option>`).join('')}
+        ${FUEL_TYPES.map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('')}
       </select>
     </div>
     <div class="editField">
@@ -605,14 +679,14 @@ function renderEditBody(cRows) {
 }
 
 async function saveEditDialog() {
-  const body    = els.editDialogBody;
+  const body     = els.editDialogBody;
   const editRows = [...body.querySelectorAll('.editRow')];
 
   const updates = [];
   for (const div of editRows) {
-    const id      = div.dataset.id;
-    const drums   = safeInt(div.querySelector('.editDrums').value, 0);
-    const gallons = safeFloat(div.querySelector('.editGallons').value);
+    const id     = div.dataset.id;
+    const drums  = safeInt(div.querySelector('.editDrums').value, 0);
+    const gallons = drums * DRUM_GAL; // always reset to full on drum count edit
     updates.push({ id, drums, gallons });
   }
 
@@ -645,6 +719,168 @@ els.editDialogClose.addEventListener('click', closeEditDialog);
 els.editDialog.addEventListener('click', e => {
   if (e.target === els.editDialog) closeEditDialog();
 });
+
+// ── Manage Fuel Types Dialog ───────────────────────────────────────────────
+
+function buildFuelOptions(selectEl) {
+  selectEl.innerHTML = '<option value="" disabled selected>Select fuel</option>' +
+    FUEL_TYPES.map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('');
+}
+
+function refreshAllFuelSelects() {
+  // Re-populate every fuel dropdown currently in the DOM
+  document.querySelectorAll('#newFuelType, #editNewFuelType').forEach(sel => {
+    const cur = sel.value;
+    buildFuelOptions(sel);
+    if (FUEL_TYPES.includes(cur)) sel.value = cur;
+  });
+}
+
+function renderFuelDialogList() {
+  const list = els.fuelDialogList;
+  list.innerHTML = '';
+  for (const fuel of FUEL_TYPES) {
+    const row = document.createElement('div');
+    row.className = 'fuelTypeRow';
+    const dot = fuelColor(fuel);
+    row.innerHTML = `
+      <span class="fuelDot" style="background:${dot}"></span>
+      <span class="fuelTypeName2">${escHtml(fuel)}</span>
+      <button class="deleteRowBtn fuelRemoveBtn" data-fuel="${escHtml(fuel)}" type="button" title="Remove">✕</button>
+    `;
+    row.querySelector('.fuelRemoveBtn').addEventListener('click', () => {
+      FUEL_TYPES = FUEL_TYPES.filter(f => f !== fuel);
+      saveFuelTypes(FUEL_TYPES);
+      renderFuelDialogList();
+      refreshAllFuelSelects();
+    });
+    list.appendChild(row);
+  }
+}
+
+function openFuelDialog() {
+  renderFuelDialogList();
+  els.fuelNewInput.value = '';
+  els.fuelDialog.showModal();
+  setTimeout(() => els.fuelNewInput.focus(), 80);
+}
+
+function closeFuelDialog() {
+  if (els.fuelDialog.open) els.fuelDialog.close();
+}
+
+els.btnManageFuels.addEventListener('click', openFuelDialog);
+els.fuelDialogClose.addEventListener('click', closeFuelDialog);
+els.fuelDoneBtn.addEventListener('click', closeFuelDialog);
+els.fuelDialog.addEventListener('click', e => { if (e.target === els.fuelDialog) closeFuelDialog(); });
+
+els.fuelAddBtn.addEventListener('click', () => {
+  const name = (els.fuelNewInput.value || '').trim();
+  if (!name) return;
+  if (FUEL_TYPES.map(f => f.toLowerCase()).includes(name.toLowerCase())) {
+    setStatus(`"${name}" already exists.`, true);
+    return;
+  }
+  FUEL_TYPES.push(name);
+  saveFuelTypes(FUEL_TYPES);
+  renderFuelDialogList();
+  refreshAllFuelSelects();
+  els.fuelNewInput.value = '';
+  els.fuelNewInput.focus();
+  setStatus(`Added fuel type "${name}".`);
+});
+
+els.fuelNewInput.addEventListener('keydown', e => { if (e.key === 'Enter') els.fuelAddBtn.click(); });
+
+// ── Empty Drum Log ─────────────────────────────────────────────────────────
+
+function renderEmpties() {
+  const root = els.emptiesRoot;
+  if (!root) return;
+  root.innerHTML = '';
+
+  // Section header
+  const hdr = document.createElement('div');
+  hdr.className = 'containerHeader';
+  hdr.innerHTML = `
+    <span class="containerName" style="color:var(--accent)">Empty Drum Log</span>
+    <span class="containerLine"></span>
+    <span class="containerMeta">${empties.length} drum${empties.length !== 1 ? 's' : ''} total</span>
+  `;
+  root.appendChild(hdr);
+
+  if (empties.length === 0) {
+    root.innerHTML += `<div class="emptyState" style="padding:24px;font-size:13px;">No drums emptied yet — they'll appear here as you use fuel.</div>`;
+    return;
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'tableWrap';
+
+  const table = document.createElement('table');
+  table.className = 'fuelTable';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Time</th>
+        <th>Container</th>
+        <th>Fuel Type</th>
+        <th class="center">Drums</th>
+        <th></th>
+      </tr>
+    </thead>
+  `;
+
+  const tbody = document.createElement('tbody');
+
+  for (const entry of empties) {
+    const dt      = entry.emptiedAt ? new Date(entry.emptiedAt) : null;
+    const dateStr = dt ? dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    const timeStr = dt ? dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
+    const dotColor = fuelColor(entry.fuelType);
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="color:var(--muted);font-size:12px;">${dateStr}</td>
+      <td style="color:var(--muted);font-size:12px;">${timeStr}</td>
+      <td>${escHtml(entry.container)}</td>
+      <td>
+        <div class="fuelTypeName">
+          <span class="fuelDot" style="background:${dotColor}"></span>
+          <strong>${escHtml(entry.fuelType)}</strong>
+        </div>
+      </td>
+      <td class="center">
+        <span style="font-size:16px;font-weight:700;color:#fff;">${entry.count}</span>
+      </td>
+      <td class="center">
+        <button class="deleteRowBtn" data-act="del-empty" type="button" title="Remove entry">✕</button>
+      </td>
+    `;
+
+    tr.querySelector('[data-act="del-empty"]').addEventListener('click', () => deleteEmptyEntry(entry.id));
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  root.appendChild(wrap);
+}
+
+async function deleteEmptyEntry(id) {
+  const ok = confirm('Remove this entry from the empty drum log?');
+  if (!ok) return;
+  try {
+    setStatus('Removing…');
+    await api(`/api/empties?project=${encodeURIComponent(project)}&id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    empties = empties.filter(e => e.id !== id);
+    renderEmpties();
+    setStatus('Entry removed.');
+  } catch (e) {
+    setStatus(e.message, true);
+  }
+}
 
 // ── Export CSV ─────────────────────────────────────────────────────────────
 
