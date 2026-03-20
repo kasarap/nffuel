@@ -270,18 +270,21 @@ async function doAdd() {
 async function refresh() {
   if (!project) { rows = []; empties = []; renderInventory(); renderEmpties(); return; }
   try {
-    const [fuelData, emptyData] = await Promise.all([
-      api(`/api/fuel?project=${encodeURIComponent(project)}`),
-      api(`/api/empties?project=${encodeURIComponent(project)}`),
-    ]);
-    rows    = Array.isArray(fuelData.rows)      ? fuelData.rows      : [];
-    empties = Array.isArray(emptyData.entries)  ? emptyData.entries  : [];
-    renderInventory();
-    renderEmpties();
+    const fuelData = await api(`/api/fuel?project=${encodeURIComponent(project)}`);
+    rows = Array.isArray(fuelData.rows) ? fuelData.rows : [];
   } catch (e) {
     setStatus(e.message, true);
     throw e;
   }
+  // Empties endpoint may not exist on older deployments — fail silently
+  try {
+    const emptyData = await api(`/api/empties?project=${encodeURIComponent(project)}`);
+    empties = Array.isArray(emptyData.entries) ? emptyData.entries : [];
+  } catch (_) {
+    empties = [];
+  }
+  renderInventory();
+  renderEmpties();
 }
 
 function renderInventory() {
@@ -930,14 +933,11 @@ window.addEventListener('unhandledrejection', e => setStatus(`Error: ${String(e.
   setStatus('Starting…');
   renderProject();
 
-  let apiOk = true;
-  try { await api('/api/ping'); }
-  catch (e) { apiOk = false; setStatus(`API not reachable: ${e.message}`, true); }
+  // Ping is a health check only — don't block data load if it fails
+  try { await api('/api/ping'); } catch (_) {}
 
-  if (apiOk) {
-    try {
-      await refresh();
-      if (els.statusBar.dataset.error !== '1') setStatus('Ready.');
-    } catch (_) {}
-  }
+  try {
+    await refresh();
+    if (els.statusBar.dataset.error !== '1') setStatus('Ready.');
+  } catch (_) {}
 })();
