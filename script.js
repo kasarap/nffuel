@@ -1,4 +1,4 @@
-// Fuel Inventory — V13
+// Fuel Inventory — V14
 
 const DEFAULT_FUEL_TYPES = ['IPA','Heptane','Hexane','87','Jet A','Ethanol','Diesel','Kerosene'];
 
@@ -46,9 +46,7 @@ const els = {
   btnManageFuels:    document.getElementById('btnManageFuels'),
   statusBar:      document.getElementById('statusBar'),
   status:         document.getElementById('status'),
-  emptyTally:     document.getElementById('emptyTally'),
   inventoryRoot:  document.getElementById('inventoryRoot'),
-  emptiesRoot:    document.getElementById('emptiesRoot'),
   // add dialog
   addDialog:      document.getElementById('addDialog'),
   addDialogClose: document.getElementById('addDialogClose'),
@@ -100,17 +98,10 @@ const els = {
   boneyardInput:       document.getElementById('boneyardInput'),
   boneyardCancelBtn:   document.getElementById('boneyardCancelBtn'),
   boneyardSaveBtn:     document.getElementById('boneyardSaveBtn'),
-  // edit empty dialog
-  editEmptyDialog:      document.getElementById('editEmptyDialog'),
-  editEmptyDialogClose: document.getElementById('editEmptyDialogClose'),
-  editEmptyDialogBody:  document.getElementById('editEmptyDialogBody'),
-  editEmptySaveBtn:     document.getElementById('editEmptySaveBtn'),
-  editEmptyCancelBtn:   document.getElementById('editEmptyCancelBtn'),
 };
 
 let project      = localStorage.getItem('fuel_project') || '';
 let rows         = [];
-let empties      = [];
 let saltPailQty  = 0;
 let boneyardQty  = 0;
 let pendingAction = null;
@@ -271,7 +262,7 @@ async function doAdd() {
 // ── Refresh / Render ───────────────────────────────────────────────────────
 
 async function refresh() {
-  if (!project) { rows = []; empties = []; saltPailQty = 0; boneyardQty = 0; renderInventory(); renderSaltPails(); renderBoneyard(); renderEmpties(); return; }
+  if (!project) { rows = []; saltPailQty = 0; boneyardQty = 0; renderInventory(); renderSaltPails(); renderBoneyard(); return; }
   try {
     const fuelData = await api(`/api/fuel?project=${encodeURIComponent(project)}`);
     rows = Array.isArray(fuelData.rows) ? fuelData.rows : [];
@@ -279,10 +270,6 @@ async function refresh() {
     setStatus(e.message, true);
     throw e;
   }
-  try {
-    const emptyData = await api(`/api/empties?project=${encodeURIComponent(project)}`);
-    empties = Array.isArray(emptyData.entries) ? emptyData.entries : [];
-  } catch (_) { empties = []; }
   try {
     const spData = await api(`/api/saltpails?project=${encodeURIComponent(project)}`);
     saltPailQty = typeof spData.quantity === 'number' ? spData.quantity : 0;
@@ -294,7 +281,6 @@ async function refresh() {
   renderInventory();
   renderSaltPails();
   renderBoneyard();
-  renderEmpties();
 }
 
 function renderInventory() {
@@ -839,224 +825,6 @@ els.boneyardSaveBtn.addEventListener('click', async () => {
 });
 
 els.boneyardInput.addEventListener('keydown', e => { if (e.key === 'Enter') els.boneyardSaveBtn.click(); });
-
-// ── Empty Drum Log ─────────────────────────────────────────────────────────
-
-function renderEmpties() {
-  const root = els.emptiesRoot;
-  if (!root) return;
-  root.innerHTML = '';
-
-  const hdr = document.createElement('div');
-  hdr.className = 'containerHeader';
-  hdr.innerHTML = `
-    <span class="containerName" style="color:var(--accent)">Empty Drum Log</span>
-    <span class="containerLine"></span>
-    <span class="containerMeta">${empties.length} drum${empties.length !== 1 ? 's' : ''} total</span>
-    <button class="btn editContainerBtn" type="button" id="editEmptiesBtn">Edit</button>
-  `;
-  hdr.querySelector('#editEmptiesBtn').addEventListener('click', () => openEditEmptyDialog());
-  root.appendChild(hdr);
-
-  if (empties.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'emptyState';
-    empty.style.cssText = 'padding:24px;font-size:13px;';
-    empty.textContent = 'No drums logged yet.';
-    root.appendChild(empty);
-    return;
-  }
-
-  const wrap = document.createElement('div');
-  wrap.className = 'tableWrap';
-
-  const table = document.createElement('table');
-  table.className = 'fuelTable';
-  table.innerHTML = `
-    <thead>
-      <tr>
-        <th>Fuel Type</th>
-        <th class="center">Drums</th>
-        <th></th>
-      </tr>
-    </thead>
-  `;
-
-  const tbody = document.createElement('tbody');
-
-  for (const entry of [...empties].sort((a,b) => (a.fuelType||"").localeCompare(b.fuelType||""))) {
-    const dotColor = fuelColor(entry.fuelType);
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>
-        <div class="fuelTypeName">
-          <span class="fuelDot" style="background:${dotColor}"></span>
-          <strong>${escHtml(entry.fuelType)}</strong>
-        </div>
-      </td>
-      <td class="center">
-        <span style="font-size:16px;font-weight:700;color:#fff;">${entry.count}</span>
-      </td>
-      <td class="center">
-        <button class="deleteRowBtn" data-act="del-empty" type="button" title="Remove entry">✕</button>
-      </td>
-    `;
-    tr.querySelector('[data-act="del-empty"]').addEventListener('click', () => deleteEmptyEntry(entry.id));
-    tbody.appendChild(tr);
-  }
-
-  table.appendChild(tbody);
-  wrap.appendChild(table);
-  root.appendChild(wrap);
-}
-
-async function deleteEmptyEntry(id) {
-  const ok = confirm('Remove this entry from the empty drum log?');
-  if (!ok) return;
-  try {
-    setStatus('Removing…');
-    await api(`/api/empties?project=${encodeURIComponent(project)}&id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-    empties = empties.filter(e => e.id !== id);
-    renderEmpties();
-    setStatus('Entry removed.');
-  } catch (e) {
-    setStatus(e.message, true);
-  }
-}
-
-function openEditEmptyDialog() {
-  renderEditEmptyBody();
-  els.editEmptyDialog.showModal();
-}
-
-function closeEditEmptyDialog() {
-  if (els.editEmptyDialog.open) els.editEmptyDialog.close();
-}
-
-function renderEditEmptyBody() {
-  const body = els.editEmptyDialogBody;
-  body.innerHTML = '';
-
-  for (const entry of [...empties].sort((a,b) => (a.fuelType||"").localeCompare(b.fuelType||""))) {
-    const dotColor = fuelColor(entry.fuelType);
-    const div = document.createElement('div');
-    div.className = 'editRow';
-    div.dataset.id = entry.id;
-    div.innerHTML = `
-      <div class="editRowFuel" style="flex:1.5">
-        <span class="fuelDot" style="background:${dotColor}"></span>
-        <span class="editFuelName">${escHtml(entry.fuelType)}</span>
-      </div>
-      <div class="editField">
-        <label class="lbl">Drums</label>
-        <input class="editDrums" type="text" inputmode="numeric" value="${entry.count}" />
-      </div>
-      <div class="editField" style="flex:1.2">
-        <label class="lbl">Fuel Type</label>
-        <select class="editEmptyFuelType">
-          ${[...FUEL_TYPES].sort((a,b)=>a.localeCompare(b)).map(f => `<option value="${escHtml(f)}"${f === entry.fuelType ? ' selected' : ''}>${escHtml(f)}</option>`).join('')}
-        </select>
-      </div>
-      <button class="deleteRowBtn editDeleteBtn" type="button" title="Remove">✕</button>
-    `;
-
-    div.querySelector('.editDeleteBtn').addEventListener('click', async () => {
-      const ok = confirm(`Remove this empty drum entry?`);
-      if (!ok) return;
-      try {
-        setStatus('Removing…');
-        await api(`/api/empties?project=${encodeURIComponent(project)}&id=${encodeURIComponent(entry.id)}`, { method: 'DELETE' });
-        empties = empties.filter(e => e.id !== entry.id);
-        renderEditEmptyBody();
-        renderEmpties();
-        setStatus('Entry removed.');
-      } catch (e) {
-        setStatus(e.message, true);
-      }
-    });
-
-    body.appendChild(div);
-  }
-
-  // Add new empty entry row
-  const addDiv = document.createElement('div');
-  addDiv.className = 'editAddRow';
-  addDiv.innerHTML = `
-    <div class="editField" style="flex:2">
-      <label class="lbl">Add Fuel Type</label>
-      <select id="editEmptyNewFuelType">
-        <option value="" disabled selected>Select fuel</option>
-        ${[...FUEL_TYPES].sort((a,b)=>a.localeCompare(b)).map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('')}
-      </select>
-    </div>
-    <div class="editField">
-      <label class="lbl">Drums</label>
-      <input id="editEmptyNewCount" type="text" inputmode="numeric" placeholder="1" value="1" />
-    </div>
-    <button id="editEmptyAddBtn" class="btn primary" type="button" style="align-self:end">+ Add</button>
-  `;
-
-  addDiv.querySelector('#editEmptyAddBtn').addEventListener('click', async () => {
-    const fuelType = addDiv.querySelector('#editEmptyNewFuelType').value;
-    const count    = Math.max(1, safeInt(addDiv.querySelector('#editEmptyNewCount').value, 1));
-    if (!fuelType) return setStatus('Select a fuel type.', true);
-    try {
-      setStatus('Adding…');
-      await api(`/api/empties?project=${encodeURIComponent(project)}`, {
-        method: 'POST',
-        body: JSON.stringify({ entry: { container: '', fuelType, count } }),
-      });
-      const emptyData = await api(`/api/empties?project=${encodeURIComponent(project)}`);
-      empties = Array.isArray(emptyData.entries) ? emptyData.entries : [];
-      renderEditEmptyBody();
-      renderEmpties();
-      setStatus(`Added ${count} empty drum(s) of ${fuelType}.`);
-    } catch (e) {
-      setStatus(e.message, true);
-    }
-  });
-
-  body.appendChild(addDiv);
-}
-
-els.editEmptyDialogClose.addEventListener('click', closeEditEmptyDialog);
-els.editEmptyCancelBtn.addEventListener('click', closeEditEmptyDialog);
-els.editEmptyDialog.addEventListener('click', e => { if (e.target === els.editEmptyDialog) closeEditEmptyDialog(); });
-
-els.editEmptySaveBtn.addEventListener('click', async () => {
-  const body = els.editEmptyDialogBody;
-  const editRows = [...body.querySelectorAll('.editRow')];
-
-  const updates = [];
-  for (const div of editRows) {
-    const id       = String(div.dataset.id || '');
-    const countEl  = div.querySelector('.editDrums');
-    const fuelEl   = div.querySelector('.editEmptyFuelType');
-    const count    = safeInt(countEl ? countEl.value : '1', 1);
-    const fuelType = fuelEl ? fuelEl.value : '';
-    if (id) updates.push({ id, count, fuelType });
-  }
-
-  try {
-    setStatus('Saving…');
-    for (const u of updates) {
-      const existing = empties.find(e => e.id === u.id);
-      if (!existing) continue;
-      await api(`/api/empties?project=${encodeURIComponent(project)}&id=${encodeURIComponent(u.id)}`, { method: 'DELETE' });
-      await api(`/api/empties?project=${encodeURIComponent(project)}`, {
-        method: 'POST',
-        body: JSON.stringify({ entry: { container: existing.container, fuelType: u.fuelType, count: u.count } }),
-      });
-    }
-    const emptyData = await api(`/api/empties?project=${encodeURIComponent(project)}`);
-    empties = Array.isArray(emptyData.entries) ? emptyData.entries : [];
-    closeEditEmptyDialog();
-    renderEmpties();
-    setStatus('Empty drum log updated.');
-  } catch (e) {
-    setStatus(e.message, true);
-  }
-});
 
 // ── Export CSV ─────────────────────────────────────────────────────────────
 
