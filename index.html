@@ -38,7 +38,7 @@
         </div>
         <div class="statusRight">
           <span id="emptyTally" class="tally"></span>
-          <span class="pill">V12</span>
+          <span class="pill">V13</span>
         </div>
       </div>
     </div>
@@ -48,6 +48,9 @@
 
     <!-- Salt Pail Quantity -->
     <div id="saltPailRoot" class="inventoryRoot" style="margin-top:8px;"></div>
+
+    <!-- Boneyard -->
+    <div id="boneyardRoot" class="inventoryRoot" style="margin-top:8px;"></div>
 
     <!-- Empty Drum Log -->
     <div id="emptiesRoot" class="inventoryRoot" style="margin-top:8px;"></div>
@@ -86,7 +89,7 @@
     </div>
   </dialog>
 
-  <!-- Use Fuel Popup -->
+  <!-- Edit Drum Counts Dialog -->
   <dialog id="useDialog" class="dialog">
     <div class="dialogCard">
       <div class="dialogHeader">
@@ -97,31 +100,22 @@
         <button id="useDialogClose" class="iconBtn" type="button" aria-label="Close">✕</button>
       </div>
 
-      <div class="useStats">
-        <div class="useStat">
-          <div class="useStatVal" id="useStatDrums">—</div>
-          <div class="useStatLbl">Drums</div>
-        </div>
-        <div class="useStatDivider"></div>
-        <div class="useStat">
-          <div class="useStatVal" id="useStatGals">—</div>
-          <div class="useStatLbl">Gal remaining</div>
-        </div>
-      </div>
-
       <div class="field">
-        <div class="lbl">Gallons Used</div>
-        <input id="useAmount" type="text" inputmode="decimal"
-               pattern="[0-9]*[.]?[0-9]*"
-               placeholder="0"
-               autocomplete="off" />
+        <div class="lbl">Full Drums</div>
+        <input id="useFullInput" type="text" inputmode="numeric" placeholder="0" autocomplete="off" />
       </div>
-
-      <div id="usePreview" class="usePreview"></div>
+      <div class="field">
+        <div class="lbl">Partial Drums</div>
+        <input id="usePartialInput" type="text" inputmode="numeric" placeholder="0" autocomplete="off" />
+      </div>
+      <div class="field">
+        <div class="lbl">Empty Drums</div>
+        <input id="useEmptyInput" type="text" inputmode="numeric" placeholder="0" autocomplete="off" />
+      </div>
 
       <div class="dialogBtns">
         <button id="useCancelBtn" class="btn ghost" type="button">Cancel</button>
-        <button id="useConfirmBtn" class="btn primary" type="button">Subtract</button>
+        <button id="useConfirmBtn" class="btn primary" type="button">Save</button>
       </div>
     </div>
   </dialog>
@@ -168,7 +162,6 @@
     </div>
   </dialog>
 
-
   <!-- Salt Pail Edit Dialog -->
   <dialog id="saltPailDialog" class="dialog">
     <div class="dialogCard">
@@ -183,6 +176,24 @@
       <div class="dialogBtns">
         <button id="saltPailCancelBtn" class="btn ghost" type="button">Cancel</button>
         <button id="saltPailSaveBtn" class="btn primary" type="button">Save</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Boneyard Edit Dialog -->
+  <dialog id="boneyardDialog" class="dialog">
+    <div class="dialogCard">
+      <div class="dialogHeader">
+        <div class="dialogFuelName">Edit Boneyard Drums</div>
+        <button id="boneyardDialogClose" class="iconBtn" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="field">
+        <div class="lbl">Total Drums</div>
+        <input id="boneyardInput" type="text" inputmode="numeric" placeholder="0" />
+      </div>
+      <div class="dialogBtns">
+        <button id="boneyardCancelBtn" class="btn ghost" type="button">Cancel</button>
+        <button id="boneyardSaveBtn" class="btn primary" type="button">Save</button>
       </div>
     </div>
   </dialog>
@@ -217,6 +228,6 @@
     </div>
   </dialog>
 
-  <script defer src="script.js?v=v12"></script>
+  <script defer src="script.js?v=v13"></script>
 </body>
 </html>

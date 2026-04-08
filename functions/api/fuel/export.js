@@ -1,4 +1,4 @@
-// Fuel Inventory — /api/fuel/export — V3
+// Fuel Inventory — /api/fuel/export — V13
 
 export async function onRequest(context) {
   const { request, env } = context;

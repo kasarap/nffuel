@@ -673,3 +673,15 @@ table.fuelTable td.center { text-align: center; }
   .editRow { grid-template-columns: 1fr 0.8fr 0.8fr auto; gap: 6px; padding: 8px; }
   .editAddRow { grid-template-columns: 1.4fr 1fr auto; gap: 6px; padding: 8px; }
 }
+
+/* ── V13 additions ── */
+
+/* Drum count state colors */
+.drumCount {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+.drumFull    { color: var(--green); }
+.drumPartial { color: var(--yellow); }
+.drumEmpty   { color: var(--muted); }

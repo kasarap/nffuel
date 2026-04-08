@@ -1,5 +1,5 @@
-// Fuel Inventory — /api/fuel — V3
-// Stores flat rows: {id, container, fuelType, drums, gallons}
+// Fuel Inventory — /api/fuel — V13
+// Stores flat rows: {id, container, fuelType, full, partial, empty}
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -14,7 +14,6 @@ export async function onRequest(context) {
 
   const key = `fuel:${project}`;
 
-  // ── GET ──────────────────────────────────────────────────────────────────
   if (method === 'GET') {
     const data = await readProject(kv, key);
     data.rows.sort((a, b) => {
@@ -25,7 +24,6 @@ export async function onRequest(context) {
     return json({ project, rows: data.rows });
   }
 
-  // ── POST — add new row ───────────────────────────────────────────────────
   if (method === 'POST') {
     const body = await request.json().catch(() => null);
     const row  = body?.row;
@@ -45,7 +43,6 @@ export async function onRequest(context) {
     return json({ ok: true, row: newRow });
   }
 
-  // ── PUT — update drums/gallons ───────────────────────────────────────────
   if (method === 'PUT') {
     const id = url.searchParams.get('id');
     if (!id) return json({ error: 'Missing id' }, 400);
@@ -57,12 +54,11 @@ export async function onRequest(context) {
     const idx  = data.rows.findIndex(r => r.id === id);
     if (idx < 0) return json({ error: 'Not found' }, 404);
 
-    // Accept partial updates (drums and/or gallons and/or container)
     const updated = { ...data.rows[idx] };
-    if (body.drums     !== undefined) updated.drums     = Math.max(0, parseInt(body.drums, 10)   || 0);
-    if (body.gallons   !== undefined) updated.gallons   = Math.max(0, parseFloat(body.gallons)   || 0);
+    if (body.full      !== undefined) updated.full      = Math.max(0, parseInt(body.full,    10) || 0);
+    if (body.partial   !== undefined) updated.partial   = Math.max(0, parseInt(body.partial, 10) || 0);
+    if (body.empty     !== undefined) updated.empty     = Math.max(0, parseInt(body.empty,   10) || 0);
     if (body.container !== undefined) updated.container = safeStr(body.container) || 'Default';
-    // Full row replace (used when merging on add)
     if (body.row) Object.assign(updated, normalizeRow(body.row));
     updated.updatedAt = new Date().toISOString();
 
@@ -71,7 +67,6 @@ export async function onRequest(context) {
     return json({ ok: true, row: data.rows[idx] });
   }
 
-  // ── DELETE ───────────────────────────────────────────────────────────────
   if (method === 'DELETE') {
     const id = url.searchParams.get('id');
     if (!id) return json({ error: 'Missing id' }, 400);
@@ -88,8 +83,6 @@ export async function onRequest(context) {
   return json({ error: 'Method not allowed' }, 405);
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
 async function readProject(kv, key) {
   const raw = await kv.get(key, { type: 'json' });
   if (raw && typeof raw === 'object' && Array.isArray(raw.rows)) return raw;
@@ -97,13 +90,12 @@ async function readProject(kv, key) {
 }
 
 function normalizeRow(r) {
-  const drums   = Math.max(0, parseInt(r.drums, 10) || 0);
-  const gallons = Math.max(0, parseFloat(r.gallons) || 0);
   return {
     container: safeStr(r.container) || 'Default',
     fuelType:  safeStr(r.fuelType),
-    drums,
-    gallons,
+    full:      Math.max(0, parseInt(r.full,    10) || 0),
+    partial:   Math.max(0, parseInt(r.partial, 10) || 0),
+    empty:     Math.max(0, parseInt(r.empty,   10) || 0),
   };
 }
 
